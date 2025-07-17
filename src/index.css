@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+
+.toggle-checkbox {
+    position: absolute;
+    display: block;
+    width: 1.5rem; /* w-6 */
+    height: 1.5rem; /* h-6 */
+    border-radius: 9999px; /* rounded-full */
+    /* background-color: transparent; Make transparent to show toggle-label background */
+    border-width: 4px; /* border-4 */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    left: 0; /* Default position for unchecked */
+    transition: left 0.3s ease-in-out, border-color 0.3s ease-in-out; /* Smooth transition */
+    border-color: #4F46E5; /* Purple for Gemini */
+}
+
+.toggle-checkbox:checked {
+    right: 0;
+    left: calc(100% - 1.5rem); /* Move to the right */
+    border-color: #F97316; /* Orange for Claude */
+}
+
+.toggle-label {
+    display: block;
+    overflow: hidden;
+    height: 1.5rem; /* h-6 */
+    border-radius: 9999px; /* rounded-full */
+    cursor: pointer;
+    transition: background-color 0.3s ease-in-out; /* Smooth transition */
+}
+
+.toggle-checkbox:not(:checked) + .toggle-label {
+    background-color: #4F46E5; /* Purple for Gemini */
+}
+
+.toggle-checkbox:checked + .toggle-label {
+    background-color: #F97316; /* Orange for Claude */
+}

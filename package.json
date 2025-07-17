@@ -1,0 +1,49 @@
+{
+  "name": "schema",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "server": "nodemon --ignore USER_FILES/ server.js",
+    "client": "cross-env HTTPS=true SSL_CRT_FILE=localhost.pem SSL_KEY_FILE=localhost-key.pem react-scripts start",
+    "dev": "concurrently \"npm run server\" \"npm run client\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "proxy": "http://localhost:3001",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "concurrently": "^9.2.0",
+    "diff": "^8.0.2",
+    "dotenv": "^17.1.0",
+    "express": "^5.1.0",
+    "file-saver": "^2.0.5",
+    "jszip": "^3.10.1",
+    "prettier": "^3.6.2",
+    "react": "^19.1.0",
+    "react-diff-viewer": "^3.1.1",
+    "react-dom": "^19.1.0",
+    "react-scripts": "^5.0.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.10",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

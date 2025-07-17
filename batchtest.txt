@@ -1,0 +1,7 @@
+Create schema for:
+- Signup: Pressing the signup button
+- Signup_Success: Successfully signing up (include email address used, user id, region)
+- Signup_Fail: Failed signing up (give error code, email address used, timestamp)
+- Signup_SwichTo_Signin: Record when user switches to sign in because account already exists (include email and userid)
+- Quote_Ready: Record when user gets a quote display on card. Include quote_premium(initial, monthly), score, estimated annual mileage
+- Quote_Rejected: Record when user fails to get quote, include reason (such as HIGH_RISK_PROFILE or UNVERIFIED_USER) and user id

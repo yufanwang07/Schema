@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "properties": {
+    "event_name": {
+      "type": "string",
+      "description": "The name of the event. Example: 'Quote_Ready', 'Quote_Rejected', 'Launch_Q2B'."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["USER_EVENT", "SYSTEM_EVENT"],
+      "description": "The type of the event. Always 'USER_EVENT' if user triggered, 'SYSTEM_EVENT' if system triggered."
+    },
+    "event_action": {
+      "type": "string",
+      "enum": ["TAP", "INPUT", "AUTOMATIC"],
+      "description": "The action that triggered the event. Typically 'TAP' if it involves the user clicking on UI, such as pressing sign up button. Other options include 'INPUT' for user typing and 'AUTOMATIC'"
+    },
+    "event_label": {
+      "type": "string",
+      "description": "Same as event_name; used for redundancy and easier analytics labeling."
+    },
+    "event_description": {
+      "type": "string",
+      "description": "Human-readable explanation of when this event is recorded and what it means."
+    },
+    "event_metadata": {
+      "type": "object",
+      "description": "Additional metadata relevant to the event, such as quote details or error reasons.",
+      "additionalProperties": true
+    }
+  },
+  "required": ["event_name", "event_type", "event_action", "event_label", "event_description", "event_metadata"]
+}
