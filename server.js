@@ -625,6 +625,7 @@ app.post('/api/cli-inject', async (req, res) => {
         if (useClaude) {
             cliName = 'Claude';
             cliCommand = 'claude';
+            prompt = ``
             cliArgs = ['--dangerously-skip-permissions', `-p "${prompt}"`];
         } else {
             cliName = 'Gemini';

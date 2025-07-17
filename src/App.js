@@ -1323,8 +1323,8 @@ function App() {
                                         value={prompt}
                                         onChange={handlePromptChange}
                                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } } }
-                                        placeholder={currentChat ? "Describe the data to fill the schema with..." : "Start a new event to begin"}
-                                        disabled={!currentChat || loading}
+                                        placeholder="Describe the event you want to create..."
+                                        disabled={loading}
                                         rows="5" />
                                     <input
                                         type="file"
