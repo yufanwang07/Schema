@@ -743,6 +743,7 @@ function App() {
 
         let chatToUse = currentChat;
 
+        // If no active chat, create one.
         if (!chatToUse) {
             setLoading(true);
             try {
@@ -756,15 +757,16 @@ function App() {
                     filledSchema: null,
                     isNew: false
                 };
+                // Set the new chat as active immediately.
                 setChats(prevChats => [...prevChats, newChat]);
                 setCurrentChat(newChat);
                 setDisplayedLines([]);
                 prevFilledSchema.current = '';
-                chatToUse = newChat;
+                chatToUse = newChat; // Ensure chatToUse is the new chat for the rest of this function.
             } catch (error) {
                 console.error('Error fetching initial schema:', error);
                 setLoading(false);
-                return; // Stop if we can't create a new chat
+                return;
             } finally {
                 setLoading(false);
             }
@@ -775,7 +777,12 @@ function App() {
         const updatedMessages = [...chatToUse.messages, userMessage];
         const conversationHistory = updatedMessages.slice(-10);
 
-        setCurrentChat(prevChat => prevChat ? { ...prevChat, messages: updatedMessages } : null);
+        // Update the current chat with the new user message to give immediate feedback.
+        // Use chatToUse to avoid issues with stale state.
+        const updatedChatWithUserMessage = { ...chatToUse, messages: updatedMessages };
+        setCurrentChat(updatedChatWithUserMessage);
+        setChats(prevChats => prevChats.map(c => c.id === chatToUse.id ? updatedChatWithUserMessage : c));
+
 
         const schemaToSend = chatToUse.filledSchema
             ? JSON.stringify(chatToUse.filledSchema, null, 2)
@@ -803,14 +810,15 @@ function App() {
 
             const data = await response.json();
             let finalMessages = updatedMessages;
-            let updatedChat = { ...currentChat, messages: updatedMessages };
+            // Use chatToUse to ensure we're updating the correct chat object.
+            let updatedChat = { ...chatToUse, messages: updatedMessages };
 
             if (data.action === 'update_schema') {
                 const { schema, explanation } = data.payload;
                 const assistantMessage = { role: 'assistant', content: explanation };
                 finalMessages = [...updatedMessages, assistantMessage];
 
-                let eventName = currentChat.name;
+                let eventName = chatToUse.name;
                 if (schema && (schema.event_label || schema.event_name)) {
                     const rawEventName = schema.event_label || schema.event_name;
                     eventName = rawEventName
@@ -818,13 +826,13 @@ function App() {
                         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                         .join(' ');
                 }
-                updatedChat = { ...currentChat, name: eventName, messages: finalMessages, filledSchema: schema || null };
+                updatedChat = { ...chatToUse, name: eventName, messages: finalMessages, filledSchema: schema || null };
 
             } else if (data.action === 'answer_question') {
                 const { answer } = data.payload;
                 const assistantMessage = { role: 'assistant', content: answer };
                 finalMessages = [...updatedMessages, assistantMessage];
-                updatedChat = { ...currentChat, messages: finalMessages, filledSchema: currentChat.filledSchema || null };
+                updatedChat = { ...chatToUse, messages: finalMessages, filledSchema: chatToUse.filledSchema || null };
             }
 
             setChats(prevChats => prevChats.map(chat => chat.id === updatedChat.id ? updatedChat : chat));
@@ -835,7 +843,7 @@ function App() {
             console.error('Error generating response:', error);
             const errorMessage = { role: 'assistant', content: `Sorry, I encountered an error: ${error.message}` };
             const finalMessages = [...updatedMessages, errorMessage];
-            const updatedChatWithError = { ...currentChat, messages: finalMessages };
+            const updatedChatWithError = { ...chatToUse, messages: finalMessages };
             setChats(prevChats => prevChats.map(chat => chat.id === updatedChatWithError.id ? updatedChatWithError : chat));
             setCurrentChat(updatedChatWithError);
         } finally {
