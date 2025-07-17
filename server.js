@@ -619,13 +619,13 @@ app.post('/api/cli-inject', async (req, res) => {
 
         const schemaString = JSON.stringify(schema).replace(/"/g, "'");
 
-        const prompt = `Add logging functionality described by this: ${schemaString} logging the event and metadata. Implement only logging for this for now, stop logic and mark success once you've implemented this logging--DO NOT REVERT/START OVER. Do not add comments or redundancies/artifacts/examples. Do not create new files, instead try to integrate with the existing code (find relevant files). Do not assume dummy data or assume variables for metadata exist--find where information is given and get information from there. If logic appears to be a process/more backend, logic should probably be in logic flows in the repository files. Match the existing logging methods used (may not be default for language). You can look in ${exampleFilesInfo || 'ContactEditViewModel and ContactEditFragment'} for an example of the structure (resources.repository.log.event most likely).`
+        let prompt = `Add logging functionality described by this: ${schemaString} logging the event and metadata. Implement only logging for this for now, stop logic and mark success once you've implemented this logging--DO NOT REVERT/START OVER. Do not add comments or redundancies/artifacts/examples. Do not create new files, instead try to integrate with the existing code (find relevant files). Do not assume dummy data or assume variables for metadata exist--find where information is given and get information from there. If logic appears to be a process/more backend, logic should probably be in logic flows in the repository files. Match the existing logging methods used (may not be default for language). You can look in ${exampleFilesInfo || 'ContactEditViewModel and ContactEditFragment'} for an example of the structure (resources.repository.log.event most likely).`
         
         let cliCommand, cliName, cliArgs;
         if (useClaude) {
             cliName = 'Claude';
             cliCommand = 'claude';
-            prompt = ``
+            prompt = `Add logging functionality described by this: ${schemaString} logging the metadata. Don't create new files, but integrate with existing logic. Don't use dummy data for metadata--try to find how to get the metadata in the codebase.`
             cliArgs = ['--dangerously-skip-permissions', `-p "${prompt}"`];
         } else {
             cliName = 'Gemini';
