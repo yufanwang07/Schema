@@ -870,26 +870,25 @@ function App() {
     };
 
     const handleCodeAgent = async (prompt) => {
-        const activeChatId = currentChat?.id;
-        if (!activeChatId) {
-            setNotification({ message: "No active chat selected.", type: 'error' });
-            return;
-        }
-
         if ((!localRoute.trim() && !directoryHandle)) {
             setNotification({ message: "Please select a folder to run the code agent.", type: 'info' })
+
             return;
         }
         setInjecting(true);
         setIsCodeAgentTyping(true);
         try {
             let filesToProcess = []
+
             let baseDirPath = ''
             if (directoryHandle) {
                 baseDirPath = directoryHandle.name
+
                 filesToProcess = await readAllFilesFromDirectoryHandle(directoryHandle, '', useCli)
+
             } else if (localRoute.trim()) {
                 setNotification({ message: "Code agent currently only works with a selected folder.", type: 'info' })
+
                 setInjecting(false)
                 setIsCodeAgentTyping(false)
                 return
@@ -906,39 +905,35 @@ function App() {
 
             if (!response.ok) {
                 const errorData = await response.text()
+
                 throw new Error(`Failed to run code agent: ${response.statusText}. ${errorData}`)
-            }
-            const reader = response.body.getReader()
+
+            } const reader = response.body.getReader()
+
             const decoder = new TextDecoder()
             let buffer = ''
 
             while (true) {
                 const { done, value } = await reader.read()
+
                 if (done) {
                     break
-                }
-                buffer += decoder.decode(value, { stream: true })
+                } buffer += decoder.decode(value, { stream: true })
                 const lines = buffer.split('\n')
                 buffer = lines.pop(); // Keep the last partial line in the buffer                
                 for (const line of lines) {
                     if (line.trim() === '') continue
                     const data = JSON.parse(line)
                     if (data.stdout) {
-                        const newMessages = [{ role: 'assistant', content: `${data.stdout}` }];
-                        setChats(prevChats => {
-                            const newChats = prevChats.map(chat => {
-                                if (chat.id === activeChatId) {
-                                    const updatedMessages = [...chat.messages, ...newMessages];
-                                    const updatedChat = { ...chat, messages: updatedMessages };
-                                    setCurrentChat(updatedChat);
-                                    return updatedChat;
-                                }
-                                return chat;
-                            });
-                            return newChats;
-                        });
-                    }
-                    if (data.modifiedFiles) {
+                        const newMessages = [{ role: 'assistant', content: `${data.stdout}` }]
+                        setChats(prevChats => prevChats.map(chat => {
+                            if (chat.id === currentChat.id) {
+                                const updatedMessages = [...chat.messages, ...newMessages]
+                                setCurrentChat({ ...chat, messages: updatedMessages })
+                                return { ...chat, messages: updatedMessages }
+                            } return chat
+                        }))
+                    } if (data.modifiedFiles) {
                         setPendingChanges(data.modifiedFiles)
                         setActiveDiffTab(data.modifiedFiles[0].filePath)
                         setShowCodeAgentDiff(true)
@@ -950,18 +945,13 @@ function App() {
             console.error('Error running code agent:', error)
             setNotification({ message: `Failed to run code agent: ${error.message}`, type: 'error' })
             const errorMessage = { role: 'assistant', content: `Sorry, I encountered an error with the code agent: ${error.message}` }
-            setChats(prevChats => {
-                const newChats = prevChats.map(chat => {
-                    if (chat.id === activeChatId) {
-                        const updatedMessages = [...chat.messages, errorMessage];
-                        const updatedChat = { ...chat, messages: updatedMessages };
-                        setCurrentChat(updatedChat);
-                        return updatedChat;
-                    }
-                    return chat;
-                });
-                return newChats;
-            });
+            setChats(prevChats => prevChats.map(chat => {
+                if (chat.id === currentChat.id) {
+                    const updatedMessages = [...chat.messages, errorMessage]
+                    setCurrentChat({ ...chat, messages: updatedMessages })
+                    return { ...chat, messages: updatedMessages }
+                } return chat
+            }));
         } finally {
             setInjecting(false)
             setIsCodeAgentTyping(false)
@@ -991,117 +981,6 @@ function App() {
             setNotification({ message: `Failed to apply changes: ${error.message}`, type: 'error' });
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleGenerateReport = async () => {
-        const activeChatId = currentChat?.id;
-        if (!activeChatId) {
-            setNotification({ message: "No active chat selected.", type: 'error' });
-            return;
-        }
-
-        if ((!localRoute.trim() && !directoryHandle)) {
-            setNotification({ message: "Please select a folder to generate the report.", type: 'info' });
-            return;
-        }
-
-        setInjecting(true);
-        setIsCodeAgentTyping(true);
-        try {
-            let filesToProcess = [];
-            let baseDirPath = '';
-            if (directoryHandle) {
-                baseDirPath = directoryHandle.name;
-                filesToProcess = await readAllFilesFromDirectoryHandle(directoryHandle, '', useCli);
-            } else {
-                setNotification({ message: "Report generation currently only works with a selected folder.", type: 'info' });
-                setInjecting(false);
-                setIsCodeAgentTyping(false);
-                return;
-            }
-            const trimmedFiles = filesToProcess.map(file => {
-                if (file.content) {
-                    return { ...file, content: String(file.content).trim() };
-                }
-                return file;
-            });
-
-            setOriginalFiles(filesToProcess);
-            const endpoint = '/api/generate-report'; // New endpoint
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    files: trimmedFiles,
-                    baseDirPath: baseDirPath,
-                    useClaude: useClaude,
-                    useCli: useCli
-                }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.text();
-                throw new Error(`Failed to generate report: ${response.statusText}. ${errorData}`);
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (line.trim() === '') continue;
-                    const data = JSON.parse(line);
-                    if (data.stdout) {
-                        const newMessages = [{ role: 'assistant', content: `${data.stdout}` }];
-                        setChats(prevChats => {
-                            const newChats = prevChats.map(chat => {
-                                if (chat.id === activeChatId) {
-                                    const updatedMessages = [...chat.messages, ...newMessages];
-                                    const updatedChat = { ...chat, messages: updatedMessages };
-                                    setCurrentChat(updatedChat);
-                                    return updatedChat;
-                                }
-                                return chat;
-                            });
-                            return newChats;
-                        });
-                    }
-                    if (data.modifiedFiles) {
-                        setPendingChanges(data.modifiedFiles);
-                        setActiveDiffTab(data.modifiedFiles[0].filePath);
-                        setShowCodeAgentDiff(true);
-                        setShowDiffPanel(false);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error generating report:', error);
-            setNotification({ message: `Failed to generate report: ${error.message}`, type: 'error' });
-            const errorMessage = { role: 'assistant', content: `Sorry, I encountered an error while generating the report: ${error.message}` };
-            setChats(prevChats => {
-                const newChats = prevChats.map(chat => {
-                    if (chat.id === activeChatId) {
-                        const updatedMessages = [...chat.messages, errorMessage];
-                        const updatedChat = { ...chat, messages: updatedMessages };
-                        setCurrentChat(updatedChat);
-                        return updatedChat;
-                    }
-                    return chat;
-                });
-                return newChats;
-            });
-        } finally {
-            setInjecting(false);
-            setIsCodeAgentTyping(false);
         }
     };
 
@@ -1431,14 +1310,6 @@ function App() {
                     ))}
                 </ul>
                 <div className="mt-auto space-y-2">
-                    <button
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
-                        onClick={handleGenerateReport}
-                        disabled={loading || injecting}
-                        title="Generate a report based on the selected folder"
-                    >
-                        Generate Report
-                    </button>
                     <button
                         className="w-full bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
                         onClick={handleDownloadAllSchemas}

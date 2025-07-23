@@ -4,7 +4,7 @@ module.exports = function(app) {
   app.use(
     '/api',
     createProxyMiddleware({
-      target: 'https://localhost:3001',
+      target: 'https://localhost:8998',
       changeOrigin: true,
       secure: false,
     })
@@ -12,7 +12,7 @@ module.exports = function(app) {
   app.use(
     '/cmd',
     createProxyMiddleware({
-      target: 'https://localhost:3001',
+      target: 'https://localhost:8998',
       changeOrigin: true,
       secure: false,
     })

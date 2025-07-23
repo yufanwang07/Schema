@@ -8,7 +8,7 @@ const { spawn, exec } = require('child_process');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const app = express();
-const port = 3001;
+const port = 8998;
 
 let baseSchema = {};
 (async () => {
@@ -479,9 +479,10 @@ app.post('/api/inject-logging', async (req, res) => {
         // Step 1: Send instructions/file structure to Gemini to get relevant folders
         const fullFileStructure = files.map(file => file.filePath).join('\n');
 
-        const initialPrompt = `You are an AI assistant that helps identify relevant parts of a codebase for injecting logging functionality.\nGiven the following file structure of a codebase, identify the subfolders under *any* 'domain/' and 'ui/' directories that are most likely relevant for injecting logging based on this schema: ${JSON.stringify(schema, null, 2)}
+        let initialPrompt = `You are an AI assistant that helps identify relevant parts of a codebase for injecting logging functionality.\nGiven the following file structure of a codebase, identify the subfolders under *any* 'domain/' and 'ui/' directories that are most likely relevant for injecting logging based on this schema: ${JSON.stringify(schema, null, 2)}
 You should only return the relative paths of these relevant subfolders, one per line. Do not include files directly under 'domain/' or 'ui/' directories, only their subfolders.\nIf no subfolders are relevant, return an empty array.\n\nExample Output:\n[\n  "src/domain/users/models",\n  "frontend/ui/components/buttons"\n]\n\nFile Structure:\n\`\`\`\n${fullFileStructure}\n\`\`\`\n`;
-        try {
+        initialPrompt = initialPrompt.replace("\"", "\'")
+try {
             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Using a capable model for this step
             const result = await model.generateContent(initialPrompt);
             const response = await result.response;
