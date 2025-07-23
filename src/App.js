@@ -27,7 +27,7 @@ const JsonTable = ({ data, highlightedPaths = [], animatedValues = {}, pathPrefi
                     const isHighlighted = highlightedPaths.includes(currentPath);
                     return (
                         <tr key={key} className={`border-b border-gray-800 last:border-b-0 transition-all duration-300 ${isHighlighted ? 'bg-yellow-500 bg-opacity-20' : ''}`}>
-                                                        <td className={`py-1 pr-2 ${useClaude ? 'text-orange-500' : 'text-purple-500'} align-top font-medium`} style={{ width: '120px' }}>{formatKey(key)}</td>
+                            <td className={`py-1 pr-2 ${useClaude ? 'text-orange-500' : 'text-purple-500'} align-top font-medium`} style={{ width: '120px' }}>{formatKey(key)}</td>
                             <td className="py-1">
                                 {Array.isArray(value) ? (
                                     <div className="flex flex-col space-y-1">
@@ -180,22 +180,29 @@ function App() {
     const [useCli, setUseCli] = useState(true);
     const [useClaude, setUseClaude] = useState(false);
     const [notification, setNotification] = useState({ message: '', type: '' });
+    const [showCodeAgentDiff, setShowCodeAgentDiff] = useState(false);
+    const [isCodeAgentTyping, setIsCodeAgentTyping] = useState(false);
 
     const [animatedChatId, setAnimatedChatId] = useState(null);
     const [schemaView, setSchemaView] = useState('split'); // raw, split, visualized
     const [animatedSchema, setAnimatedSchema] = useState(null);
     const [highlightedPaths, setHighlightedPaths] = useState([]);
     const [animatedValues, setAnimatedValues] = useState({});
-    const [rawJsonInput, setRawJsonInput] = useState("");
-    const [jsonError, setJsonError] = useState(null);
 
     const schemaDisplayRef = useRef(null);
     const prevFilledSchema = useRef(null);
     const animationIdRef = useRef(0);
     const isMounted = useRef(false);
+    const chatContainerRef = useRef(null);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [showSearch, setShowSearch] = useState(false);
+
+    useEffect(() => {
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+    }, [currentChat?.messages]);
 
     const filteredChats = chats.filter(chat =>
         chat.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -260,7 +267,7 @@ function App() {
 
     // Effect for line-by-line animation of the schema
     useEffect(() => {
-        const newSchema = currentChat?.filledSchema;""
+        const newSchema = currentChat?.filledSchema; ""
         const newSchemaString = newSchema ? JSON.stringify(newSchema, null, 2) : '';
 
         // If the chat ID has changed, we skip the animation entirely.
@@ -833,11 +840,22 @@ function App() {
                 const assistantMessage = { role: 'assistant', content: answer };
                 finalMessages = [...updatedMessages, assistantMessage];
                 updatedChat = { ...chatToUse, messages: finalMessages, filledSchema: chatToUse.filledSchema || null };
+            } else if (data.action === 'code_agent') {
+                const { prompt: codeAgentPrompt, explanation } = data.payload;
+                const assistantMessage = { role: 'assistant', content: explanation };
+                finalMessages = [...updatedMessages, assistantMessage];
+                updatedChat = { ...chatToUse, messages: finalMessages };
+                setChats(prevChats => prevChats.map(chat => chat.id === updatedChat.id ? updatedChat : chat));
+                setCurrentChat(updatedChat);
+
+                await handleCodeAgent(codeAgentPrompt);
             }
 
-            setChats(prevChats => prevChats.map(chat => chat.id === updatedChat.id ? updatedChat : chat));
-            setCurrentChat(updatedChat);
-            setPrompt('');
+            if (data.action !== 'code_agent') {
+                setChats(prevChats => prevChats.map(chat => chat.id === updatedChat.id ? updatedChat : chat));
+                setCurrentChat(updatedChat);
+                setPrompt('');
+            }
 
         } catch (error) {
             console.error('Error generating response:', error);
@@ -848,6 +866,106 @@ function App() {
             setCurrentChat(updatedChatWithError);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleCodeAgent = async (prompt) => {
+        const activeChatId = currentChat?.id;
+        if (!activeChatId) {
+            setNotification({ message: "No active chat selected.", type: 'error' });
+            return;
+        }
+
+        if ((!localRoute.trim() && !directoryHandle)) {
+            setNotification({ message: "Please select a folder to run the code agent.", type: 'info' })
+            return;
+        }
+        setInjecting(true);
+        setIsCodeAgentTyping(true);
+        try {
+            let filesToProcess = []
+            let baseDirPath = ''
+            if (directoryHandle) {
+                baseDirPath = directoryHandle.name
+                filesToProcess = await readAllFilesFromDirectoryHandle(directoryHandle, '', useCli)
+            } else if (localRoute.trim()) {
+                setNotification({ message: "Code agent currently only works with a selected folder.", type: 'info' })
+                setInjecting(false)
+                setIsCodeAgentTyping(false)
+                return
+            }
+            const trimmedFiles = filesToProcess.map(file => {
+                if (file.content) {
+                    return { ...file, content: String(file.content).trim() }
+                } return file
+            })
+
+            setOriginalFiles(filesToProcess)
+            const endpoint = '/api/code-agent'
+            const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: prompt, files: trimmedFiles, baseDirPath: baseDirPath, useClaude: useClaude, useCli: useCli }), })
+
+            if (!response.ok) {
+                const errorData = await response.text()
+                throw new Error(`Failed to run code agent: ${response.statusText}. ${errorData}`)
+            }
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) {
+                    break
+                }
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n')
+                buffer = lines.pop(); // Keep the last partial line in the buffer                
+                for (const line of lines) {
+                    if (line.trim() === '') continue
+                    const data = JSON.parse(line)
+                    if (data.stdout) {
+                        const newMessages = [{ role: 'assistant', content: `${data.stdout}` }];
+                        setChats(prevChats => {
+                            const newChats = prevChats.map(chat => {
+                                if (chat.id === activeChatId) {
+                                    const updatedMessages = [...chat.messages, ...newMessages];
+                                    const updatedChat = { ...chat, messages: updatedMessages };
+                                    setCurrentChat(updatedChat);
+                                    return updatedChat;
+                                }
+                                return chat;
+                            });
+                            return newChats;
+                        });
+                    }
+                    if (data.modifiedFiles) {
+                        setPendingChanges(data.modifiedFiles)
+                        setActiveDiffTab(data.modifiedFiles[0].filePath)
+                        setShowCodeAgentDiff(true)
+                        setShowDiffPanel(false)
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error running code agent:', error)
+            setNotification({ message: `Failed to run code agent: ${error.message}`, type: 'error' })
+            const errorMessage = { role: 'assistant', content: `Sorry, I encountered an error with the code agent: ${error.message}` }
+            setChats(prevChats => {
+                const newChats = prevChats.map(chat => {
+                    if (chat.id === activeChatId) {
+                        const updatedMessages = [...chat.messages, errorMessage];
+                        const updatedChat = { ...chat, messages: updatedMessages };
+                        setCurrentChat(updatedChat);
+                        return updatedChat;
+                    }
+                    return chat;
+                });
+                return newChats;
+            });
+        } finally {
+            setInjecting(false)
+            setIsCodeAgentTyping(false)
+            setPrompt('');
         }
     };
 
@@ -866,12 +984,124 @@ function App() {
             setPendingChanges([]);
             setOriginalFiles([]);
             setShowDiffPanel(false);
+            setShowCodeAgentDiff(false);
             setActiveDiffTab('');
         } catch (error) {
             console.error('Error applying changes:', error);
             setNotification({ message: `Failed to apply changes: ${error.message}`, type: 'error' });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleGenerateReport = async () => {
+        const activeChatId = currentChat?.id;
+        if (!activeChatId) {
+            setNotification({ message: "No active chat selected.", type: 'error' });
+            return;
+        }
+
+        if ((!localRoute.trim() && !directoryHandle)) {
+            setNotification({ message: "Please select a folder to generate the report.", type: 'info' });
+            return;
+        }
+
+        setInjecting(true);
+        setIsCodeAgentTyping(true);
+        try {
+            let filesToProcess = [];
+            let baseDirPath = '';
+            if (directoryHandle) {
+                baseDirPath = directoryHandle.name;
+                filesToProcess = await readAllFilesFromDirectoryHandle(directoryHandle, '', useCli);
+            } else {
+                setNotification({ message: "Report generation currently only works with a selected folder.", type: 'info' });
+                setInjecting(false);
+                setIsCodeAgentTyping(false);
+                return;
+            }
+            const trimmedFiles = filesToProcess.map(file => {
+                if (file.content) {
+                    return { ...file, content: String(file.content).trim() };
+                }
+                return file;
+            });
+
+            setOriginalFiles(filesToProcess);
+            const endpoint = '/api/generate-report'; // New endpoint
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    files: trimmedFiles,
+                    baseDirPath: baseDirPath,
+                    useClaude: useClaude,
+                    useCli: useCli
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(`Failed to generate report: ${response.statusText}. ${errorData}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.trim() === '') continue;
+                    const data = JSON.parse(line);
+                    if (data.stdout) {
+                        const newMessages = [{ role: 'assistant', content: `${data.stdout}` }];
+                        setChats(prevChats => {
+                            const newChats = prevChats.map(chat => {
+                                if (chat.id === activeChatId) {
+                                    const updatedMessages = [...chat.messages, ...newMessages];
+                                    const updatedChat = { ...chat, messages: updatedMessages };
+                                    setCurrentChat(updatedChat);
+                                    return updatedChat;
+                                }
+                                return chat;
+                            });
+                            return newChats;
+                        });
+                    }
+                    if (data.modifiedFiles) {
+                        setPendingChanges(data.modifiedFiles);
+                        setActiveDiffTab(data.modifiedFiles[0].filePath);
+                        setShowCodeAgentDiff(true);
+                        setShowDiffPanel(false);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error generating report:', error);
+            setNotification({ message: `Failed to generate report: ${error.message}`, type: 'error' });
+            const errorMessage = { role: 'assistant', content: `Sorry, I encountered an error while generating the report: ${error.message}` };
+            setChats(prevChats => {
+                const newChats = prevChats.map(chat => {
+                    if (chat.id === activeChatId) {
+                        const updatedMessages = [...chat.messages, errorMessage];
+                        const updatedChat = { ...chat, messages: updatedMessages };
+                        setCurrentChat(updatedChat);
+                        return updatedChat;
+                    }
+                    return chat;
+                });
+                return newChats;
+            });
+        } finally {
+            setInjecting(false);
+            setIsCodeAgentTyping(false);
         }
     };
 
@@ -1015,10 +1245,10 @@ function App() {
 
     return (
         <div className="dark bg-gray-950 text-gray-200 min-h-screen flex font-sans text-sm">
-            <Notification 
-                message={notification.message} 
-                type={notification.type} 
-                onDismiss={() => setNotification({ message: '', type: '' })} 
+            <Notification
+                message={notification.message}
+                type={notification.type}
+                onDismiss={() => setNotification({ message: '', type: '' })}
             />
             <aside className="w-64 bg-gray-900 p-3 flex flex-col border-r border-gray-800">
                 <h1 className="text-lg font-semibold mb-4 text-gray-100">Event Schemas</h1>
@@ -1107,7 +1337,7 @@ function App() {
                                 onClick={() => {
                                     setShowSearch(false);
                                     setSearchTerm('');
-                                } }
+                                }}
                                 title="Back to Actions"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -1202,6 +1432,14 @@ function App() {
                 </ul>
                 <div className="mt-auto space-y-2">
                     <button
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
+                        onClick={handleGenerateReport}
+                        disabled={loading || injecting}
+                        title="Generate a report based on the selected folder"
+                    >
+                        Generate Report
+                    </button>
+                    <button
                         className="w-full bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
                         onClick={handleDownloadAllSchemas}
                         title="Download All Local Schemas"
@@ -1250,25 +1488,25 @@ function App() {
                             <div className="flex-grow overflow-auto no-scrollbar">
                                 {activeOriginalFile && activePendingChange && (
                                     <ReactDiffViewer
-                                    oldValue={normalizeNewlines(activeOriginalFile ? activeOriginalFile.content : '')}
-                                    newValue={normalizeNewlines(activePendingChange ? activePendingChange.modifiedContent : '')}
-                                    splitView={true}
-                                    useDarkTheme={true}
-                                    styles={{
-                                        diffContainer: { backgroundColor: '#1f2937' }, /* gray-800 */
-                                        diffRemoved: { backgroundColor: '#4a0e0b' }, /* dark red */
-                                        diffAdded: { backgroundColor: '#0c4a2e' }, /* dark green */
-                                        line: { color: '#e2e8f0' }, /* slate-200 */
-                                        gutter: { color: '#94a3b8' }, /* slate-400 */
-                                    }}
-                                />
+                                        oldValue={normalizeNewlines(activeOriginalFile ? activeOriginalFile.content : '')}
+                                        newValue={normalizeNewlines(activePendingChange ? activePendingChange.modifiedContent : '')}
+                                        splitView={true}
+                                        useDarkTheme={true}
+                                        styles={{
+                                            diffContainer: { backgroundColor: '#1f2937' }, /* gray-800 */
+                                            diffRemoved: { backgroundColor: '#4a0e0b' }, /* dark red */
+                                            diffAdded: { backgroundColor: '#0c4a2e' }, /* dark green */
+                                            line: { color: '#e2e8f0' }, /* slate-200 */
+                                            gutter: { color: '#94a3b8' }, /* slate-400 */
+                                        }}
+                                    />
                                 )}
                             </div>
                         </div>
                     ) : (
                         <>
                             <h2 className="text-base font-semibold p-3 border-b border-gray-800 text-gray-100">Conversation</h2>
-                            <div className="flex-grow overflow-y-auto p-3 space-y-4 no-scrollbar">
+                            <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-3 space-y-4 no-scrollbar">
                                 {currentChat ? (
                                     currentChat.messages.map((message, index) => (
                                         <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -1280,6 +1518,17 @@ function App() {
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-gray-500 text-lg">
                                         <p>Select an event or start a new one</p>
+                                    </div>
+                                )}
+                                {isCodeAgentTyping && (
+                                    <div className="flex justify-start">
+                                        <div className="max-w-[75%] p-3 rounded-lg bg-gray-800 text-gray-200">
+                                            <div className="typing-indicator">
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1330,7 +1579,7 @@ function App() {
                                         className="flex-grow bg-transparent text-gray-200 p-2 pr-20 focus:outline-none resize-none placeholder-gray-500"
                                         value={prompt}
                                         onChange={handlePromptChange}
-                                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } } }
+                                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
                                         placeholder="Describe the event you want to create..."
                                         disabled={loading}
                                         rows="5" />
@@ -1386,43 +1635,63 @@ function App() {
 
                 {/* Filled Schema Column */}
                 <div className="flex flex-col flex-1 h-full bg-gray-900 rounded-none border border-gray-800">
-                    <div className="flex justify-between items-center p-3 border-b border-gray-800">
-                        <h2 className="text-base font-semibold text-gray-100">Filled Schema</h2>
-                        <div className="flex space-x-1">
-                            <button onClick={() => setSchemaView('raw')} className={`px-2 py-1 text-xs rounded ${schemaView === 'raw' ? 'bg-gray-700' : 'bg-gray-800'}`}>Raw</button>
-                            <button onClick={() => setSchemaView('split')} className={`px-2 py-1 text-xs rounded ${schemaView === 'split' ? 'bg-gray-700' : 'bg-gray-800'}`}>Split</button>
-                            <button onClick={() => setSchemaView('visualized')} className={`px-2 py-1 text-xs rounded ${schemaView === 'visualized' ? 'bg-gray-700' : 'bg-gray-800'}`}>Visualized</button>
-                        </div>
-                    </div>
-                    {schemaView === 'raw' && (
-                        <div className="flex-grow flex flex-col bg-gray-900">
-                            <textarea
-                                className={`flex-grow bg-gray-900 text-xs text-gray-300 p-3 overflow-auto whitespace-pre-wrap break-all font-mono no-scrollbar focus:outline-none ${jsonError ? 'border-2 border-red-500' : ''}`}
-                                value={rawJsonInput}
-                                onChange={(e) => {
-                                    setRawJsonInput(e.target.value);
-                                    try {
-                                        const parsed = JSON.parse(e.target.value);
-                                        setJsonError(null);
-                                        setCurrentChat(prev => ({ ...prev, filledSchema: parsed }));
-                                    } catch (err) {
-                                        setJsonError('Invalid JSON');
-                                    }
-                                }}
-                                spellCheck="false"
-                                autoCorrect="off"
-                                autoComplete="off"
-                                autoCapitalize="off"
-                            />
-                            {jsonError && <div className="text-red-500 p-2 bg-gray-800 text-xs">{jsonError}</div>}
-                        </div>
-                    )}
-                    {schemaView === 'split' && (
-                        <div className="flex-grow flex h-full overflow-hidden">
-                            {currentChat ? (
-                                <>
-                                    {/* Left side: Raw Base Schema */}
-                                    <div className="w-1/2 h-full flex flex-col border-r border-gray-800">
+                    <div className="flex-grow overflow-y-auto no-scrollbar filled-schema-panel">
+                        {showCodeAgentDiff ? (
+                            <div className="flex flex-col flex-1 h-full bg-gray-900 rounded-none border border-gray-800">
+                                <div className="flex justify-between items-center p-3 border-b border-gray-800">
+                                    <h2 className="text-base font-semibold text-gray-100">Code Agent Diff</h2>
+                                    <button onClick={() => {
+                                        setShowCodeAgentDiff(false);
+                                        setPendingChanges([]);
+                                        setOriginalFiles([]);
+                                        setActiveDiffTab('');
+                                    }} className="text-gray-400 hover:text-white">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div className="flex border-b border-gray-800">
+                                    {pendingChanges.map(change => (
+                                        <button
+                                            key={change.filePath}
+                                            onClick={() => setActiveDiffTab(change.filePath)}
+                                            className={`px-4 py-2 text-sm font-medium ${activeDiffTab === change.filePath ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800'}`}
+                                        >
+                                            {change.filePath.split('/').pop()}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex-grow overflow-auto no-scrollbar">
+                                    {activeOriginalFile && activePendingChange && (
+                                        <ReactDiffViewer
+                                            oldValue={normalizeNewlines(activeOriginalFile ? activeOriginalFile.content : '')}
+                                            newValue={normalizeNewlines(activePendingChange ? activePendingChange.modifiedContent : '')}
+                                            splitView={true}
+                                            useDarkTheme={true}
+                                            styles={{
+                                                diffContainer: { backgroundColor: '#1f2937' },
+                                                diffRemoved: { backgroundColor: '#4a0e0b' },
+                                                diffAdded: { backgroundColor: '#0c4a2e' },
+                                                line: { color: '#e2e8f0' },
+                                                gutter: { color: '#94a3b8' },
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex justify-between items-center p-3 border-b border-gray-800">
+                                    <h2 className="text-base font-semibold text-gray-100">Filled Schema</h2>
+                                    <div className="flex space-x-1">
+                                        <button onClick={() => setSchemaView('raw')} className={`px-2 py-1 text-xs rounded ${schemaView === 'raw' ? 'bg-gray-700' : 'bg-gray-800'}`}>Raw</button>
+                                        <button onClick={() => setSchemaView('split')} className={`px-2 py-1 text-xs rounded ${schemaView === 'split' ? 'bg-gray-700' : 'bg-gray-800'}`}>Split</button>
+                                        <button onClick={() => setSchemaView('visualized')} className={`px-2 py-1 text-xs rounded ${schemaView === 'visualized' ? 'bg-gray-700' : 'bg-gray-800'}`}>Visualized</button>
+                                    </div>
+                                </div>
+                                {schemaView === 'raw' && (
+                                    <div className="flex-grow flex flex-col bg-gray-900">
                                         <pre className="flex-grow bg-gray-900 text-xs text-gray-300 p-3 overflow-auto whitespace-pre-wrap break-all font-mono no-scrollbar">
                                             {currentChat ? displayedLines.map((line, index) => (
                                                 <div key={index} className={`transition-colors duration-200 ${line.highlight ? 'bg-yellow-500 bg-opacity-20' : ''}`}>
@@ -1431,21 +1700,39 @@ function App() {
                                             )) : <span className="text-gray-500">Schema will appear here...</span>}
                                         </pre>
                                     </div>
-                                    {/* Right side: Visualized Filled Schema */}
-                                    <div className="w-1/2 h-full flex flex-col">
-                                        <div className="flex-grow bg-gray-900 text-xs text-gray-300 overflow-auto font-mono no-scrollbar">
-                                            <VisualizedSchemaView data={animatedSchema} highlightedPaths={highlightedPaths} useClaude={useClaude} />
-                                        </div>
+                                )}
+                                {schemaView === 'split' && (
+                                    <div className="flex-grow flex h-full overflow-hidden">
+                                        {currentChat ? (
+                                            <>
+                                                {/* Left side: Raw Base Schema */}
+                                                <div className="w-1/2 h-full flex flex-col border-r border-gray-800">
+                                                    <pre className="flex-grow bg-gray-900 text-xs text-gray-300 p-3 overflow-auto whitespace-pre-wrap break-all font-mono no-scrollbar">
+                                                        {currentChat ? displayedLines.map((line, index) => (
+                                                            <div key={index} className={`transition-colors duration-200 ${line.highlight ? 'bg-yellow-500 bg-opacity-20' : ''}`}>
+                                                                {line.text}
+                                                            </div>
+                                                        )) : <span className="text-gray-500">Schema will appear here...</span>}
+                                                    </pre>
+                                                </div>
+                                                {/* Right side: Visualized Filled Schema */}
+                                                <div className="w-1/2 h-full flex flex-col">
+                                                    <div className="flex-grow bg-gray-900 text-xs text-gray-300 overflow-auto font-mono no-scrollbar">
+                                                        <VisualizedSchemaView data={animatedSchema} highlightedPaths={highlightedPaths} useClaude={useClaude} />
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : <span className="text-gray-500 p-3">Select a chat to see the split view.</span>}
                                     </div>
-                                </>
-                            ) : <span className="text-gray-500 p-3">Select a chat to see the split view.</span>}
-                        </div>
-                    )}
-                    {schemaView === 'visualized' && (
-                        <div className="flex-grow bg-gray-900 text-xs text-gray-300 overflow-auto font-mono no-scrollbar">
-                           <VisualizedSchemaView data={animatedSchema} highlightedPaths={highlightedPaths} useClaude={useClaude} />
-                        </div>
-                    )}
+                                )}
+                                {schemaView === 'visualized' && (
+                                    <div className="flex-grow bg-gray-900 text-xs text-gray-300 overflow-auto font-mono no-scrollbar">
+                                        <VisualizedSchemaView data={animatedSchema} highlightedPaths={highlightedPaths} useClaude={useClaude} />
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
                     <div className="p-4 bg-gray-950 border-t border-gray-800">
                         <div className="flex items-center mb-2">
                             <input
@@ -1466,13 +1753,13 @@ function App() {
                                     onChange={(e) => setUseCli(e.target.checked)}
                                     disabled={loading || injecting}
                                 />
-                                <label htmlFor="cliSwitch" className="text-gray-300 text-sm" style={{marginRight: 20}}>Use CLI?</label>
+                                <label htmlFor="cliSwitch" className="text-gray-300 text-sm" style={{ marginRight: 20 }}>Use CLI?</label>
                                 {useCli && (
                                     <div className="flex items-center ml-4 space-x-2">
                                         <span className={`text-sm font-medium transition-colors duration-300 ${!useClaude ? 'text-purple-400' : 'text-gray-500'}`}>Gemini</span>
                                         <div className="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
-                                            <input type="checkbox" name="toggle" id="toggle" className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" checked={useClaude} onChange={() => setUseClaude(!useClaude)}/>
-                                            <label htmlFor="toggle" className="toggle-label block overflow-hidden h-6 rounded-full cursor-pointer"></label>
+                                            <input type="checkbox" name="toggle" id="toggle" className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" checked={useClaude} onChange={() => setUseClaude(!useClaude)} />
+                                            <label htmlFor="toggle" className="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
                                         </div>
                                         <span className={`text-sm font-medium transition-colors duration-300 ${useClaude ? 'text-orange-400' : 'text-gray-500'}`}>Claude</span>
                                     </div>

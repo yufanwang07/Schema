@@ -2,54 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Hide scrollbar for Chrome, Safari and Opera */
+.toggle-checkbox {
+    transition: left 0.2s ease-in-out;
+    left: 0;
+    border-color: #a855f7; /* purple-500 */
+}
+
+.toggle-checkbox:checked {
+    left: 1rem; /* 20px */
+    border-color: #f97316; /* orange-500 */
+}
+
+.toggle-label {
+    background-color: #a855f7; /* purple-500 */
+    transition: background-color 0.2s ease-in-out;
+}
+
+.toggle-checkbox:checked + .toggle-label {
+    background-color: #f97316; /* orange-500 */
+}
+
 .no-scrollbar::-webkit-scrollbar {
     display: none;
 }
 
-/* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
 }
 
-
-.toggle-checkbox {
-    position: absolute;
-    display: block;
-    width: 1.5rem; /* w-6 */
-    height: 1.5rem; /* h-6 */
-    border-radius: 9999px; /* rounded-full */
-    /* background-color: transparent; Make transparent to show toggle-label background */
-    border-width: 4px; /* border-4 */
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    cursor: pointer;
-    left: 0; /* Default position for unchecked */
-    transition: left 0.3s ease-in-out, border-color 0.3s ease-in-out; /* Smooth transition */
-    border-color: #4F46E5; /* Purple for Gemini */
+.filled-schema-panel {
+    flex-grow: 1;
+    overflow-y: auto;
 }
 
-.toggle-checkbox:checked {
-    right: 0;
-    left: calc(100% - 1.5rem); /* Move to the right */
-    border-color: #F97316; /* Orange for Claude */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.toggle-label {
-    display: block;
-    overflow: hidden;
-    height: 1.5rem; /* h-6 */
-    border-radius: 9999px; /* rounded-full */
-    cursor: pointer;
-    transition: background-color 0.3s ease-in-out; /* Smooth transition */
+.typing-indicator span {
+    height: 8px;
+    width: 8px;
+    margin: 0 2px;
+    background-color: #9ca3af; /* gray-400 */
+    border-radius: 50%;
+    display: inline-block;
+    animation: bounce 1.4s infinite ease-in-out both;
 }
 
-.toggle-checkbox:not(:checked) + .toggle-label {
-    background-color: #4F46E5; /* Purple for Gemini */
+.typing-indicator span:nth-child(1) {
+    animation-delay: -0.32s;
 }
 
-.toggle-checkbox:checked + .toggle-label {
-    background-color: #F97316; /* Orange for Claude */
+.typing-indicator span:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1.0);
+    }
 }

@@ -162,7 +162,7 @@ app.post('/api/batch-schemas', async (req, res) => {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const prompt = `Given the following text, please split it into a list of distinct descriptions for creating separate event schemas. Each description should be a self-contained unit. Return the descriptions as a JSON array of strings. For example, if the input is "Create a schema for a user profile with name and email. Also, create a schema for a product with name and price.", the output should be ["Create a schema for a user profile with name and email.", "Create a schema for a product with name and price."]. Input text: ${content}`;
 
         const result = await model.generateContent(prompt);
@@ -208,13 +208,16 @@ app.post('/api/batch-schemas', async (req, res) => {
 });
 
 async function generateSchemaForPrompt(schema, prompt, conversationHistory) {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite-preview-06-17" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
     const systemPrompt = `
-YouYou are an intelligent assistant for generating and refining JSON schemas. Your goal is to help the user create a valid JSON object based on a provided schema and conversational prompts.
-You have two main capabilities:
+You are an intelligent assistant for generating and refining JSON schemas and modifying code. Your goal is to help the user create a valid JSON object based on a provided schema, answer questions, or modify code.
+You have three main capabilities:
 1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object.
-2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema, you will provide a helpful text-based answer.
+2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema or code, you will provide a helpful text-based answer.
+3.  **Code Agent**: If the user's prompt is about directly modifying code that doesn't have to do with logging or involves editing code, or something that seems to imply it (not related to logging-for stuff that seems ambiguous still assume the user wants to create a schema for that event), you will call the appropriate CLI to modify code.
+
 Analyze the user's prompt and the conversation history to determine the correct action.
+
 **Response Format:**
 You MUST respond with a JSON object containing two fields: "action" and "payload".
 -   If you are updating the schema, the format is:
@@ -236,6 +239,17 @@ You MUST respond with a JSON object containing two fields: "action" and "payload
       }
     }
     \`\`\`
+- If you are calling the code agent, the format is:
+    \`\`\`json
+    {
+        "action": "code_agent",
+        "payload": {
+            "prompt": "The user's prompt to be sent to the code agent.",
+            "explanation": "A brief explanation of what you are about to do. Assume code agent is a part of you, so just return like Adding ___ to ___..."
+        }
+    }
+    \`\`\`
+
 **IMPORTANT:**
 -   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.
 -   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result
@@ -246,6 +260,7 @@ ${schema}
 ${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
 **User's Prompt:**
 ${prompt}
+If calling code agent, DO NOT SAY YOU CANNOT MODIFY CODE, BECAUSE YOU CAN BY RUNNING CODE AGENT. The code is provided directly to code agent, not you. Just forward user's request directly to code agent.
 `;
 
     const result = await model.generateContent(systemPrompt);
@@ -271,9 +286,243 @@ app.post('/api/generate', async (req, res) => {
     }
 });
 
+app.post('/api/code-agent', async (req, res) => {
+    const { prompt, files, useClaude, useCli } = req.body;
+
+    if (!prompt || !files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'Prompt and an array of files are required' });
+    }
+
+    const userFilesDir = path.join(__dirname, 'USER_FILES');
+    const originalFileContents = new Map();
+
+    try {
+        await fs.rm(userFilesDir, { recursive: true, force: true });
+        await fs.mkdir(userFilesDir, { recursive: true });
+
+        for (const file of files) {
+            const normalizedFilePath = file.filePath.replace(/\\/g, '/');
+            originalFileContents.set(normalizedFilePath, file.content);
+            const filePath = path.join(userFilesDir, file.filePath);
+            const dirName = path.dirname(filePath);
+            await fs.mkdir(dirName, { recursive: true });
+            await fs.writeFile(filePath, file.content);
+        }
+
+        let cliCommand, cliName, cliArgs;
+        if (useClaude) {
+            cliName = 'Claude';
+            cliCommand = 'claude';
+            cliArgs = ['--dangerously-skip-permissions', `-p "${prompt}"`];
+        } else {
+            cliName = 'Gemini';
+            cliCommand = 'gemini';
+            cliArgs = ['--yolo', `-p "${prompt}"`];
+        }
+
+        console.log(`Initializing ${cliName} CLI for ${prompt}`);
+        let stdoutData = '';
+        let stderrData = '';
+        const child = spawn(cliCommand, cliArgs, {
+            cwd: userFilesDir,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            shell: true,
+            env: process.env,
+        });
+
+        res.setHeader('Content-Type', 'application/json');
+
+        child.stdout.on('data', chunk => {
+            const str = chunk.toString();
+            const lines = str.split('\n').filter(line => line.trim() !== '');
+            for (const line of lines) {
+                res.write(JSON.stringify({ stdout: line }) + '\n');
+            }
+        });
+
+        child.stderr.on('data', chunk => {
+            const str = chunk.toString();
+            console.error(`[${cliName} stderr]`, str);
+        });
+
+        child.on('error', err => {
+            console.error(`Failed to start ${cliName}:`, err);
+            if (!res.headersSent) {
+                res.status(500).json({
+                    message: `Could not spawn ${cliName} process`,
+                    error: err.message,
+                });
+            }
+        });
+
+        child.on('close', async code => {
+            console.log(`${cliName} exited with code ${code}`);
+
+            if (code !== 0) {
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        message: `${cliName} process exited with an error`,
+                        exitCode: code,
+                    });
+                }
+                res.end();
+                return;
+            }
+
+            const modifiedFiles = [];
+            const getAllFiles = async (dirPath, fileList = []) => {
+                const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                for (const entry of entries) {
+                    const fullPath = path.join(dirPath, entry.name);
+                    if (entry.isDirectory()) {
+                        await getAllFiles(fullPath, fileList);
+                    } else {
+                        fileList.push(fullPath);
+                    }
+                }
+                return fileList;
+            };
+
+            const allFilePaths = await getAllFiles(userFilesDir);
+
+            for (const filePath of allFilePaths) {
+                const relativePath = path.relative(userFilesDir, filePath).replace(/\\/g, '/');
+                const originalContent = originalFileContents.get(relativePath);
+                const newContent = await fs.readFile(filePath, 'utf8');
+
+                if (originalContent !== newContent) {
+                    modifiedFiles.push({
+                        filePath: relativePath,
+                        modifiedContent: newContent,
+                    });
+                }
+            }
+
+            res.write(JSON.stringify({ modifiedFiles: modifiedFiles }) + '\n');
+            res.end();
+        });
+
+    } catch (error) {
+        console.error('Error processing code-agent request:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: `Failed to process request: ${error.message}` });
+        }
+    }
+});
+
 app.post('/api/backup-server', (req, res) => {
     createBackup(); // Call the backup function
     res.status(200).json({ message: 'Server data backed up successfully' });
+});
+
+app.post('/api/generate-report', async (req, res) => {
+    const { files, baseDirPath, useClaude, useCli } = req.body;
+    const prompt = `Generate a comprehensive event coverage percentage report (markdown file) analyzing the gap between the "Novo Mobile Analytics Spec.xlsx" specification and current Android codebase implementation.
+ 
+ Critical Requirements:
+ 
+ 1. Use ONLY Automated Search - No Manual Estimation
+ 
+ - MANDATORY: Use the comprehensive automated search methodology documented in previous reports
+ - Never rely on manual estimation - it severely underestimated coverage (49% manual vs 79% automated)
+ - Use exact string matching with grep: grep -r "EventName" /path/to/codebase --include="*.kt"
+ 
+ 2. Specification Parsing Requirements
+ 
+ # CRITICAL: Handle Excel formatting properly
+ import openpyxl
+ 
+ # For Interaction Events - MUST check for strikethrough
+ for row_num in range(2, interaction_sheet.max_row + 1):
+     cell = interaction_sheet.cell(row=row_num, column=1)
+     if cell.value and not (cell.font and cell.font.strike):  # Skip deprecated events
+         # Process valid events only
+ 
+ # For SafeStart Events - Parse numbered events 1-39
+ # Look for event_label rows to get actual event names
+ 
+ 3. Search Scope
+ 
+ - Tables: ONLY "Interaction Events" and "Safe Start" tables from Excel
+ - Exclude: Deprecated events marked with strikethrough formatting
+ - Include: All valid events regardless of implementation location
+ - Search Pattern: "ExactEventName" in quotes to avoid false positives
+ 
+ 4. Expected Results Format
+ 
+ # Event Coverage Report
+ - Total Specification Events: 187 (148 Interaction + 39 SafeStart)
+ - Implemented Events: XXX of 187 (XX% coverage)
+ - Interaction Events: XXX/148 (XX%)
+ - SafeStart Events: XXX/39 (XX%)
+ - Deprecated Events: 3 notification events (excluded from calculations)
+ 
+ 5. Key Success Criteria
+ 
+ - ✅ Must identify 140+ implemented events (not ~50-60 from manual search)
+ - ✅ Include file locations for verification (e.g., SetupScreen_Started in MobileNspIntroViewModel.kt)
+ - ✅ Handle multi-platform implementations (Firebase, Mixpanel, AppsFlyer)
+ - ✅ Exclude strikethrough events from coverage calculations
+ 
+ 6. Common Pitfalls to Avoid
+ 
+ - ❌ Manual counting/estimation → leads to severe underestimation
+ - ❌ Ignoring strikethrough formatting → inflates missing event count
+ - ❌ Limited search scope → misses events in unexpected ViewModels
+ - ❌ Not handling duplicates → incorrect specification counts
+ - ❌ Missing AppsFlyer-only events → undercounts SafeStart implementations
+ 
+ 7. Validation Checkpoints
+ 
+ 1. Specification count: Should be 187 total events (not 190+)
+ 2. Found events: Should find 140+ events (not <100)
+ 3. Key events verification: Must find SetupScreen_Started, Where_Is_Quote_Clicked, Signup_Success
+ 4. Deprecated handling: Must exclude 3 notification events with strikethrough
+ 
+ 8. Report Structure Requirements
+ 
+ - Methodology section with automated search script
+ - Coverage breakdown by category (Interaction vs SafeStart)
+ - Implementation verification with file locations
+ - Missing events analysis (should be less than~50 events, not 90+)
+ - Future-proofing: Include search methodology for replication
+ 
+ Expected outcome: Accurate xx% coverage report with xx of 187 events implemented, demonstrating excellent analytics implementation across the Novo Mobile Android application.
+ `
+
+    if (!files || !baseDirPath) {
+        return res.status(400).json({ message: 'Files and base directory path are required' });
+    }
+
+    try {
+        const cliTool = useClaude ? 'claude_code' : 'gemini_cli';
+        const cliCommand = `${cliTool} "${prompt}"`;
+
+        const child = spawn(cliCommand, {
+            shell: true,
+            env: { ...process.env, USE_CLAUDE: useClaude.toString() }
+        });
+
+        res.setHeader('Content-Type', 'application/json');
+
+        child.stdout.on('data', (data) => {
+            res.write(JSON.stringify({ stdout: data.toString() }) + '\n');
+        });
+
+        child.stderr.on('data', (data) => {
+            console.error(`stderr: ${data}`);
+            res.write(JSON.stringify({ stderr: data.toString() }) + '\n');
+        });
+
+        child.on('close', (code) => {
+            console.log(`child process exited with code ${code}`);
+            res.end();
+        });
+
+    } catch (error) {
+        console.error('Error generating report:', error);
+        res.status(500).json({ message: 'Failed to generate report' });
+    }
 });
 
 app.post('/api/inject-logging', async (req, res) => {
@@ -296,7 +545,7 @@ app.post('/api/inject-logging', async (req, res) => {
         const initialPrompt = `You are an AI assistant that helps identify relevant parts of a codebase for injecting logging functionality.\nGiven the following file structure of a codebase, identify the subfolders under *any* 'domain/' and 'ui/' directories that are most likely relevant for injecting logging based on this schema: ${JSON.stringify(schema, null, 2)}
 You should only return the relative paths of these relevant subfolders, one per line. Do not include files directly under 'domain/' or 'ui/' directories, only their subfolders.\nIf no subfolders are relevant, return an empty array.\n\nExample Output:\n[\n  "src/domain/users/models",\n  "frontend/ui/components/buttons"\n]\n\nFile Structure:\n\`\`\`\n${fullFileStructure}\n\`\`\`\n`;
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // Using a capable model for this step
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Using a capable model for this step
             const result = await model.generateContent(initialPrompt);
             const response = await result.response;
             const text = response.text();
@@ -346,7 +595,7 @@ You should only return the relative paths of these relevant subfolders, one per 
     const fileStructureForMainPrompt = filesToSendToGemini.map(file => file.filePath).join('\n');
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const prompt = `You are an AI assistant that helps inject logging functionality into existing codebases. Given a JSON schema, and the contents of its files, you need to generate the necessary code to log data conforming to the schema and integrate it into the correct file(s). The generated code should be idiomatic for the language and framework detected in the file. You must return an array of objects, where each object contains the 'filePath' (relative to the project root) and its 'modifiedContent'. 
         Only include files that you have modified. If no files are modified, return an empty array.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\nFile Structure of the Codebase:\n\`\`\`\n${fileStructureForMainPrompt}\n\`\`\`\n\nContents of Files:\n\`\`\`json\n${JSON.stringify(filesToSendToGemini, null, 0)}\n\`\`\`\n\nInstructions:\n1. Analyze the file structure and contents to identify the most appropriate file(s) for injecting logging functionality. Consider where the data relevant to the schema would be generated or processed.\n2. Generate code that, when inserted into the target file(s), will:\n    - Define a logging function or mechanism that accepts data conforming to the provided schema.\n3. Return an array of JSON objects. Each object must have a 'filePath' (relative to the project root) and 'modifiedContent' field. Only include files that you have modified. If no files are modified, return an empty array.\n\nExample of expected output format:\n\`\`\`json\n[\n  {\n    "filePath": "src/utils/logger.js",\n    "modifiedContent": "// Original content of logger.js\n\nfunction logEvent(data) {\n  console.log('Logging event:', data);\n}\n\n// Example usage\nlogEvent({\n  // ... sample data based on schema ...\n});\n"\n  },\n  {\n    "filePath": "src/components/SomeComponent.js",\n    "modifiedContent": "// Original content of SomeComponent.js\n\n// ... some code ...\n\n// Call the logging function\nlogEvent({\n  // ... relevant data from component ...\n});\n"\n  }\n]\n\`\`\`\n\nNow, provide the array of modified file contents.`
         console.log(prompt.length)
@@ -366,63 +615,6 @@ You should only return the relative paths of these relevant subfolders, one per 
     }
 });
 
-//     if (!schema || !files || !Array.isArray(files)) {
-//         return res.status(400).json({ error: 'Schema and an array of files are required' });
-//     }
-
-//     const fileStructure = files.map(file => file.filePath).join('\n');
-
-//     try {
-//         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-//         const prompt = `You are an AI assistant that helps inject logging functionality into existing codebases. Given a JSON schema, a target codebase directory (for context), and the contents of its files, you need to generate the necessary code to log data conforming to the schema and integrate it into the correct file(s). The generated code should be idiomatic for the language and framework detected in the file. You must return an array of objects, where each object contains the 'filePath' (relative to the provided baseDirPath) and its 'modifiedContent'. Only include files that you have modified.
-// \nJSON Schema:
-// \`\`\`json
-// ${JSON.stringify(schema, null, 2)}
-// \`\`\`
-// \nTarget Codebase Base Directory (for context, not for file system operations): ${baseDirPath}
-// \nFile Structure of the Codebase:
-// \`\`\`
-// ${fileStructure}
-// \`\`\`
-// \nContents of Files:
-// \`\`\`json
-// ${JSON.stringify(files, null, 0)}
-// \`\`\`
-// \nInstructions:
-// 1. Analyze the file structure and contents to identify the most appropriate file(s) for injecting logging functionality. Consider where the data relevant to the schema would be generated or processed.
-// 2. Generate code that, when inserted into the target file(s), will:\n    - Define a logging function or mechanism that accepts data conforming to the provided schema.\n    - Include an example of how to call this logging function with sample data.\n    - Ensure the generated code is well-commented and easy to understand.\n    - If the file is a JavaScript file, use console.log or a simple logging utility. If it's a Python file, use the logging module.
-// 3. Return an array of JSON objects. Each object must have a 'filePath' (relative to the provided baseDirPath) and 'modifiedContent' field. Only include files that you have modified. If no files are modified, return an empty array.
-// \nExample of expected output format:
-// \`\`\`json\n[
-//   {
-//     "filePath": "src/utils/logger.js",
-//     "modifiedContent": "// Original content of logger.js\n\nfunction logEvent(data) {\n  console.log('Logging event:', data);\n}\n\n// Example usage\nlogEvent({\n  // ... sample data based on schema ...\n});\n"
-//   },
-//   {
-//     "filePath": "src/components/SomeComponent.js",
-//     "modifiedContent": "// Original content of SomeComponent.js\n\n// ... some code ...\n\n// Call the logging function\nlogEvent({\n  // ... relevant data from component ...\n});\n"
-//   }
-// ]
-// \`\`\`
-
-// Now, provide the array of modified file contents.`;
-//         console.log(prompt.length)
-//         const result = await model.generateContent(prompt);
-//         const response = await result.response;
-//         console.log(response.usageMetadata)
-//         const text = response.text();
-//         // console.log(response.text())
-
-//         const modifiedFiles = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
-
-//         res.status(200).json({ message: 'Logging functionality processed. Please check your local folder for changes.', modifiedFiles: modifiedFiles });
-
-//     } catch (error) {
-//         console.error('Error injecting logging:', error);
-//         res.status(500).json({ error: `Failed to inject logging: ${error.message}` });
-//     }
-// });
-
 app.post('/api/inject-novo', async (req, res) => {
     console.log("Pinged Novo");
     const { schema, files, baseDirPath } = req.body;
@@ -434,7 +626,7 @@ app.post('/api/inject-novo', async (req, res) => {
     try {
         // Step 1: Collect all XML files within res/layout from the provided files
         const layoutXmlFiles = files.filter(file => {
-            const normalizedPath = file.filePath.replace('/\/g', '/'); // Normalize path separators
+            const normalizedPath = file.filePath.replace('/\\/g', '/'); // Normalize path separators
             return normalizedPath.includes('res/layout/') && normalizedPath.endsWith('.xml');
         });
 
@@ -445,20 +637,10 @@ app.post('/api/inject-novo', async (req, res) => {
         const xmlFilenames = layoutXmlFiles.map(file => file.filePath);
 
         // Step 2: Send XML filenames to Gemini to select the most likely file
-        const selectXmlPrompt = `Given the following JSON schema and a list of XML layout filenames, which XML file is most likely related to the event described by the schema? Return only the relative path of the most relevant XML file. If none are relevant, return an empty string.
-
-JSON Schema:
-\`\`\`json
-${JSON.stringify(schema, null, 2)}
-\`\`\`
-
-XML Layout Files:
-${xmlFilenames.join('\n')}
-
-Return the most relevant XML file only and nothing else.`;
+        const selectXmlPrompt = `Given the following JSON schema and a list of XML layout filenames, which XML file is most likely related to the event described by the schema? Return only the relative path of the most relevant XML file. If none are relevant, return an empty string.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\nXML Layout Files:\n${xmlFilenames.join('\n')}\n\nReturn the most relevant XML file only and nothing else.`
 
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const result = await model.generateContent(selectXmlPrompt);
         const response = await result.response;
         const selectedXmlFileRelativePath = response.text().trim();
@@ -477,11 +659,7 @@ Return the most relevant XML file only and nothing else.`;
         const selectedXmlFileContent = selectedXmlFile.content;
 
         // Step 4: Ask Gemini to return the file the appropriate onclick command is located in
-        const findOnclickFilePrompt = `Given the following XML layout file content and a JSON schema, identify the source file (likely fragment) that contains the implementation for the 'android:onClick' attribute or any other event handling logic related to the UI elements in this XML. Also, extract the value of the 'android:onClick' attribute if present in the XML. Return a JSON object with 'filePath' and 'onclickFunction'. If no such file or onclick function can be determined, return an empty string for the respective field.
-
-JSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\nXML File Content:\n\`\`\`xml\n${selectedXmlFileContent}\n\`\`\`
-Return only json in the following format:\n\`\`\`json\n{\n  \"filePath\": \"path/to/YourActivity.kt\",\n  \"onclickFunction\": \"onButtonClick\"\n}\n\`\`\`\n
-Return the JSON object only. Note the fragment (source) file should only be kotlin, so use .kt file extensions. The path should be as referenced in the XML, starting from com`;
+        const findOnclickFilePrompt = `Given the following XML layout file content and a JSON schema, identify the source file (likely fragment) that contains the implementation for the 'android:onClick' attribute or any other event handling logic related to the UI elements in this XML. Also, extract the value of the 'android:onClick' attribute if present in the XML. Return a JSON object with 'filePath' and 'onclickFunction'. If no such file or onclick function can be determined, return an empty string for the respective field.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\nXML File Content:\n\`\`\`xml\n${selectedXmlFileContent}\n\`\`\`\nReturn only json in the following format:\n\`\`\`json\n{\n  \"filePath\": \"path/to/YourActivity.kt\",\n  \"onclickFunction\": \"onButtonClick\"\n}\n\`\`\`\n\nReturn the JSON object only. Note the fragment (source) file should only be kotlin, so use .kt file extensions. The path should be as referenced in the XML, starting from com`;
         const onclickFileResult = await model.generateContent(findOnclickFilePrompt);
         const onclickFileResponse = await onclickFileResult.response;
         const onclickResponseText = onclickFileResponse.text().trim();
@@ -510,11 +688,7 @@ Return the JSON object only. Note the fragment (source) file should only be kotl
         const onclickFileContent = onclickFile.content;
 
         // Step 6: Send this file to the agent to implement the logging
-        const injectLoggingPrompt = `You are an AI assistant that helps inject logging functionality into existing codebases. Given a JSON schema, the content of a source file, and the name of an onclick function (if applicable), you need to generate the necessary code to log data conforming to the schema and integrate it into the appropriate location within this file. The generated code should be idiomatic for the language and framework detected in the file. You must return an array of objects, where each object contains the 'filePath' (relative to the project root) and its 'modifiedContent'. Only include files that you have modified. If no files are modified, return an empty array.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\nSource File Path: ${onclickFileRelativePath}\n\nSource File Content:\n\`\`\`\n${onclickFileContent}\n\`\`\`\n\nOnclick Function Name (if applicable): ${onclickFunctionName || 'N/A'}\n\nInstructions:\n1. Analyze the source file content, the JSON schema, and the onclick function name (if provided) to identify the most appropriate location to inject logging code. This will likely be within the specified onclick function or another relevant event handler or function that processes user interaction related to the schema.\n2. Generate code that, when inserted into the target file, will:\n    - Log data conforming to the provided schema.\n3. Return an array of JSON objects. Each object must have a 'filePath' (relative to the project root) and 'modifiedContent' field. Only include files that you have modified. If no files are modified, return an empty array.
-
-Example of expected output format:\n\`\`\`json\n[\n  {\n    "filePath": "${onclickFileRelativePath}",\n    "modifiedContent": "// Original content with injected logging\n"\n  }\n]\n\`\`\`
-
-Now, provide the array of modified file contents.`
+        const injectLoggingPrompt = `You are an AI assistant that helps inject logging functionality into existing codebases. Given a JSON schema, the content of a source file, and the name of an onclick function (if applicable), you need to generate the necessary code to log data conforming to the schema and integrate it into the appropriate location within this file. The generated code should be idiomatic for the language and framework detected in the file. You must return an array of objects, where each object contains the 'filePath' (relative to the project root) and its 'modifiedContent'. Only include files that you have modified. If no files are modified, return an empty array.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\nSource File Path: ${onclickFileRelativePath}\n\nSource File Content:\n\`\`\`\n${onclickFileContent}\n\`\`\`\n\nOnclick Function Name (if applicable): ${onclickFunctionName || 'N/A'}\n\nInstructions:\n1. Analyze the source file content, the JSON schema, and the onclick function name (if provided) to identify the most appropriate location to inject logging code. This will likely be within the specified onclick function or another relevant event handler or function that processes user interaction related to the schema.\n2. Generate code that, when inserted into the target file, will:\n    - Log data conforming to the provided schema.\n3. Return an array of JSON objects. Each object must have a 'filePath' (relative to the project root) and 'modifiedContent' field. Only include files that you have modified. If no files are modified, return an empty array.\n\nExample of expected output format:\n\`\`\`json\n[\n  {\n    "filePath": "${onclickFileRelativePath}",\n    "modifiedContent": "// Original content with injected logging\n"\n  }\n]\n\`\`\`\n\nNow, provide the array of modified file contents.`
 
         const finalLoggingResult = await model.generateContent(injectLoggingPrompt);
         const finalLoggingResponse = await finalLoggingResult.response;
