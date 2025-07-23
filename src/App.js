@@ -649,6 +649,59 @@ function App() {
         }
     };
 
+    const handleGenerateReport = async () => {
+        if (!directoryHandle) {
+            setNotification({ message: "Please select a folder to generate the report.", type: 'info' });
+            return;
+        }
+
+        setLoading(true);
+        try {
+            let filesToProcess = [];
+            let baseDirPath = directoryHandle.name;
+
+            filesToProcess = await readAllFilesFromDirectoryHandle(directoryHandle, '', useCli);
+
+            const trimmedFiles = filesToProcess.map(file => {
+                if (file.content) {
+                    return { ...file, content: String(file.content).trim() };
+                }
+                return file;
+            });
+
+            const response = await fetch('/api/generate-report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    files: trimmedFiles,
+                    baseDirPath: baseDirPath,
+                    useClaude: useClaude,
+                    useCli: useCli
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to generate report: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            let notificationMessage = data.message || 'Report generated successfully!';
+            if (data.stdout) {
+                notificationMessage += `\nOutput: ${data.stdout}`;
+            }
+            if (data.stderr) {
+                notificationMessage += `\nError: ${data.stderr}`;
+            }
+            setNotification({ message: notificationMessage, type: 'success' });
+
+        } catch (error) {
+            console.error('Error generating report:', error);
+            setNotification({ message: `Failed to generate report: ${error.message}`, type: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handlePromptChange = (event) => {
         setPrompt(event.target.value);
     };
@@ -1310,6 +1363,13 @@ function App() {
                     ))}
                 </ul>
                 <div className="mt-auto space-y-2">
+                    <button
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
+                        onClick={handleGenerateReport}
+                        title="Generate Report"
+                    >
+                        Generate Report
+                    </button>
                     <button
                         className="w-full bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
                         onClick={handleDownloadAllSchemas}
