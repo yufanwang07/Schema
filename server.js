@@ -417,88 +417,25 @@ app.post('/api/backup-server', (req, res) => {
 
 app.post('/api/generate-report', async (req, res) => {
     const { files, baseDirPath, useClaude, useCli } = req.body;
-    const prompt = `Generate a comprehensive event coverage percentage report (markdown file) analyzing the gap between the "Novo Mobile Analytics Spec.xlsx" specification and current Android codebase implementation.
- 
- Critical Requirements:
- 
- 1. Use ONLY Automated Search - No Manual Estimation
- 
- - MANDATORY: Use the comprehensive automated search methodology documented in previous reports
- - Never rely on manual estimation - it severely underestimated coverage (49% manual vs 79% automated)
- - Use exact string matching with grep: grep -r "EventName" /path/to/codebase --include="*.kt"
- 
- 2. Specification Parsing Requirements
- 
- # CRITICAL: Handle Excel formatting properly
- import openpyxl
- 
- # For Interaction Events - MUST check for strikethrough
- for row_num in range(2, interaction_sheet.max_row + 1):
-     cell = interaction_sheet.cell(row=row_num, column=1)
-     if cell.value and not (cell.font and cell.font.strike):  # Skip deprecated events
-         # Process valid events only
- 
- # For SafeStart Events - Parse numbered events 1-39
- # Look for event_label rows to get actual event names
- 
- 3. Search Scope
- 
- - Tables: ONLY "Interaction Events" and "Safe Start" tables from Excel
- - Exclude: Deprecated events marked with strikethrough formatting
- - Include: All valid events regardless of implementation location
- - Search Pattern: "ExactEventName" in quotes to avoid false positives
- 
- 4. Expected Results Format
- 
- # Event Coverage Report
- - Total Specification Events: 187 (148 Interaction + 39 SafeStart)
- - Implemented Events: XXX of 187 (XX% coverage)
- - Interaction Events: XXX/148 (XX%)
- - SafeStart Events: XXX/39 (XX%)
- - Deprecated Events: 3 notification events (excluded from calculations)
- 
- 5. Key Success Criteria
- 
- - ✅ Must identify 140+ implemented events (not ~50-60 from manual search)
- - ✅ Include file locations for verification (e.g., SetupScreen_Started in MobileNspIntroViewModel.kt)
- - ✅ Handle multi-platform implementations (Firebase, Mixpanel, AppsFlyer)
- - ✅ Exclude strikethrough events from coverage calculations
- 
- 6. Common Pitfalls to Avoid
- 
- - ❌ Manual counting/estimation → leads to severe underestimation
- - ❌ Ignoring strikethrough formatting → inflates missing event count
- - ❌ Limited search scope → misses events in unexpected ViewModels
- - ❌ Not handling duplicates → incorrect specification counts
- - ❌ Missing AppsFlyer-only events → undercounts SafeStart implementations
- 
- 7. Validation Checkpoints
- 
- 1. Specification count: Should be 187 total events (not 190+)
- 2. Found events: Should find 140+ events (not <100)
- 3. Key events verification: Must find SetupScreen_Started, Where_Is_Quote_Clicked, Signup_Success
- 4. Deprecated handling: Must exclude 3 notification events with strikethrough
- 
- 8. Report Structure Requirements
- 
- - Methodology section with automated search script
- - Coverage breakdown by category (Interaction vs SafeStart)
- - Implementation verification with file locations
- - Missing events analysis (should be less than~50 events, not 90+)
- - Future-proofing: Include search methodology for replication
- 
- Expected outcome: Accurate xx% coverage report with xx of 187 events implemented, demonstrating excellent analytics implementation across the Novo Mobile Android application.
- `
+        const prompt = `Generate a comprehensive event coverage percentage report (markdown file) analyzing the gap between the "Novo Mobile Analytics Spec.xlsx" specification and current Android codebase implementation.   Critical Requirements:   1. Use ONLY Automated Search - No Manual Estimation   - MANDATORY: Use the comprehensive automated search methodology documented in previous reports  - Never rely on manual estimation - it severely underestimated coverage (49% manual vs 79% automated)  - Use exact string matching with grep: grep -r "EventName" /path/to/codebase --include="*.kt"   2. Specification Parsing Requirements   # CRITICAL: Handle Excel formatting properly  import openpyxl   # For Interaction Events - MUST check for strikethrough  for row_num in range(2, interaction_sheet.max_row + 1):      cell = interaction_sheet.cell(row=row_num, column=1)      if cell.value and not (cell.font and cell.font.strike):  # Skip deprecated events          # Process valid events only   # For SafeStart Events - Parse numbered events 1-39  # Look for event_label rows to get actual event names   3. Search Scope   - Tables: ONLY "Interaction Events" and "Safe Start" tables from Excel  - Exclude: Deprecated events marked with strikethrough formatting  - Include: All valid events regardless of implementation location  - Search Pattern: "ExactEventName" in quotes to avoid false positives   4. Expected Results Format   # Event Coverage Report  - Total Specification Events: 187 (148 Interaction + 39 SafeStart)  - Implemented Events: XXX of 187 (XX% coverage)  - Interaction Events: XXX/148 (XX%)  - SafeStart Events: XXX/39 (XX%)  - Deprecated Events: 3 notification events (excluded from calculations)   5. Key Success Criteria   - ✅ Must identify 140+ implemented events (not ~50-60 from manual search)  - ✅ Include file locations for verification (e.g., SetupScreen_Started in MobileNspIntroViewModel.kt)  - ✅ Handle multi-platform implementations (Firebase, Mixpanel, AppsFlyer)  - ✅ Exclude strikethrough events from coverage calculations   6. Common Pitfalls to Avoid   - ❌ Manual counting/estimation → leads to severe underestimation  - ❌ Ignoring strikethrough formatting → inflates missing event count  - ❌ Limited search scope → misses events in unexpected ViewModels  - ❌ Not handling duplicates → incorrect specification counts  - ❌ Missing AppsFlyer-only events → undercounts SafeStart implementations   7. Validation Checkpoints   1. Specification count: Should be 187 total events (not 190+)  2. Found events: Should find 140+ events (not <100)  3. Key events verification: Must find SetupScreen_Started, Where_Is_Quote_Clicked, Signup_Success  4. Deprecated handling: Must exclude 3 notification events with strikethrough   8. Report Structure Requirements   - Methodology section with automated search script  - Coverage breakdown by category (Interaction vs SafeStart)  - Implementation verification with file locations  - Missing events analysis (should be less than~50 events, not 90+)  - Future-proofing: Include search methodology for replication   Expected outcome: Accurate xx% coverage report with xx of 187 events implemented, demonstrating excellent analytics implementation across the Novo Mobile Android application.  `.replace(/\r?\n/g, ' ');
 
     if (!files || !baseDirPath) {
         return res.status(400).json({ message: 'Files and base directory path are required' });
     }
 
     try {
-        const cliTool = useClaude ? 'claude_code' : 'gemini_cli';
-        const cliCommand = `${cliTool} "${prompt}"`;
+        let cliCommand, cliName, cliArgs;
+        if (useClaude) {
+            cliName = 'Claude';
+            cliCommand = 'claude';
+            cliArgs = ['--dangerously-skip-permissions', `-p "${prompt}"`];
+        } else {
+            cliName = 'Gemini';
+            cliCommand = 'gemini';
+            cliArgs = ['--yolo', `-p "${prompt}"`];
+        }
 
-        const child = spawn(cliCommand, {
+        const child = spawn(cliCommand, cliArgs, {
             shell: true,
             env: { ...process.env, USE_CLAUDE: useClaude.toString() }
         });
