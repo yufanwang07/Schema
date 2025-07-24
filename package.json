@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "server": "nodemon --ignore USER_FILES/ server.js",
-    "client": "cross-env HTTPS=true SSL_CRT_FILE=localhost.pem SSL_KEY_FILE=localhost-key.pem react-scripts start",
+    "client": "cross-env HTTPS=true SSL_CRT_FILE=localhost.pem SSL_KEY_FILE=localhost-key.pem HOST=0.0.0.0 react-scripts start",
     "dev": "concurrently \"npm run server\" \"npm run client\""
   },
   "keywords": [],
