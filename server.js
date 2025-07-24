@@ -313,7 +313,7 @@ app.post('/api/code-agent', async (req, res) => {
         if (useClaude) {
             cliName = 'Claude';
             cliCommand = 'claude';
-            cliArgs = ['--verbose', '--output-format', 'text', '--dangerously-skip-permissions', `-p "${prompt}"`];
+            cliArgs = ['--verbose', '--output-format', 'stream-json', '--dangerously-skip-permissions', `-p "${prompt}"`];
         } else {
             cliName = 'Gemini';
             cliCommand = 'gemini';
@@ -443,7 +443,7 @@ app.post('/api/generate-report', async (req, res) => {
         if (useClaude) {
             cliName = 'Claude';
             cliCommand = 'claude';
-            cliArgs = ['--verbose', '--output-format', 'text', '--dangerously-skip-permissions', `-p "${prompt}"`];
+            cliArgs = ['--verbose', '--output-format', 'stream-json', '--dangerously-skip-permissions', `-p "${prompt}"`];
         } else {
             cliName = 'Gemini';
             cliCommand = 'gemini';
@@ -453,6 +453,7 @@ app.post('/api/generate-report', async (req, res) => {
         console.log(`Spawning command: ${cliCommand} ${cliArgs.join(' ')} in directory: ${userFilesDir}`);
         const child = spawn(cliCommand, cliArgs, {
             cwd: userFilesDir, // Set working directory to USER_FILES
+            stdio: ['ignore', 'pipe', 'pipe'],
             shell: true,
             env: { ...process.env, USE_CLAUDE: useClaude.toString() }
         });
