@@ -473,19 +473,49 @@ app.post('/api/generate-report', async (req, res) => {
 
         child.on('close', async (code) => { // Added async here
             console.log(`CLI process exited with code ${code}`);
-            // Clean up USER_FILES directory
-            try {
-                await fs.rm(userFilesDir, { recursive: true, force: true });
-                console.log(`Cleaned up USER_FILES directory: ${userFilesDir}`);
-            } catch (cleanupError) {
-                console.error(`Error cleaning up USER_FILES: ${cleanupError.message}`);
+
+            if (code !== 0) {
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        message: `${cliName} process exited with an error`,
+                        exitCode: code,
+                    });
+                }
+                res.end();
+                return;
             }
 
-            if (code === 0) {
-                res.status(200).json({ message: 'Report generated successfully!', stdout: stdoutData, stderr: stderrData });
-            } else {
-                res.status(500).json({ message: `CLI process exited with code ${code}`, stdout: stdoutData, stderr: stderrData });
+            const modifiedFiles = [];
+            const getAllFiles = async (dirPath, fileList = []) => {
+                const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                for (const entry of entries) {
+                    const fullPath = path.join(dirPath, entry.name);
+                    if (entry.isDirectory()) {
+                        await getAllFiles(fullPath, fileList);
+                    } else {
+                        fileList.push(fullPath);
+                    }
+                }
+                return fileList;
+            };
+
+            const allFilePaths = await getAllFiles(userFilesDir);
+
+            for (const filePath of allFilePaths) {
+                const relativePath = path.relative(userFilesDir, filePath).replace(/\\/g, '/');
+                const originalContent = originalFileContents.get(relativePath);
+                const newContent = await fs.readFile(filePath, 'utf8');
+
+                if (originalContent !== newContent) {
+                    modifiedFiles.push({
+                        filePath: relativePath,
+                        modifiedContent: newContent,
+                    });
+                }
             }
+
+            res.write(JSON.stringify({ modifiedFiles: modifiedFiles }) + '\n');
+            res.end();
         });
 
         child.on('error', (err) => {

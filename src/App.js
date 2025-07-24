@@ -685,14 +685,22 @@ function App() {
             }
 
             const data = await response.json();
-            let notificationMessage = data.message || 'Report generated successfully!';
-            if (data.stdout) {
-                notificationMessage += `\nOutput: ${data.stdout}`;
+
+            if (data.modifiedFiles && data.modifiedFiles.length > 0) {
+                setPendingChanges(data.modifiedFiles);
+                setActiveDiffTab(data.modifiedFiles[0].filePath);
+                setShowDiffPanel(true);
+                setNotification({ message: 'Report generated. Review changes and click "Approve Changes" to apply.', type: 'success' });
+            } else {
+                let notificationMessage = data.message || 'Report generated successfully!';
+                if (data.stdout) {
+                    notificationMessage += `\nOutput: ${data.stdout}`;
+                }
+                if (data.stderr) {
+                    notificationMessage += `\nError: ${data.stderr}`;
+                }
+                setNotification({ message: notificationMessage, type: 'success' });
             }
-            if (data.stderr) {
-                notificationMessage += `\nError: ${data.stderr}`;
-            }
-            setNotification({ message: notificationMessage, type: 'success' });
 
         } catch (error) {
             console.error('Error generating report:', error);
