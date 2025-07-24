@@ -260,7 +260,7 @@ ${schema}
 ${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
 **User's Prompt:**
 ${prompt}
-If calling code agent, DO NOT SAY YOU CANNOT MODIFY CODE, BECAUSE YOU CAN BY RUNNING CODE AGENT. The code is provided directly to code agent, not you. Just forward user's request directly to code agent.
+If calling code agent, DO NOT SAY YOU CANNOT MODIFY CODE, BECAUSE YOU CAN BY RUNNING CODE AGENT. ONLY CALL THE CODE AGENT IF THE PROMPT HAS NOTHING TO DO WITH GENERATING SCHEMA OR LOGGING. The code is provided directly to code agent, not you. Just forward user's request directly to code agent.
 `;
 
     const result = await model.generateContent(systemPrompt);
@@ -313,7 +313,7 @@ app.post('/api/code-agent', async (req, res) => {
         if (useClaude) {
             cliName = 'Claude';
             cliCommand = 'claude';
-            cliArgs = ['--dangerously-skip-permissions', `-p "${prompt}"`];
+            cliArgs = ['--verbose', '--output-format', 'text', '--dangerously-skip-permissions', `-p "${prompt}"`];
         } else {
             cliName = 'Gemini';
             cliCommand = 'gemini';
@@ -443,7 +443,7 @@ app.post('/api/generate-report', async (req, res) => {
         if (useClaude) {
             cliName = 'Claude';
             cliCommand = 'claude';
-            cliArgs = ['--dangerously-skip-permissions', `-p "${prompt}"`];
+            cliArgs = ['--verbose', '--output-format', 'text', '--dangerously-skip-permissions', `-p "${prompt}"`];
         } else {
             cliName = 'Gemini';
             cliCommand = 'gemini';
