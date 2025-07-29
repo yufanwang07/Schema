@@ -1,7 +1,193 @@
-Create schema for:
-- Signup: Pressing the signup button
-- Signup_Success: Successfully signing up (include email address used, user id, region)
-- Signup_Fail: Failed signing up (give error code, email address used, timestamp)
-- Signup_SwichTo_Signin: Record when user switches to sign in because account already exists (include email and userid)
-- Quote_Ready: Record when user gets a quote display on card. Include quote_premium(initial, monthly), score, estimated annual mileage
-- Quote_Rejected: Record when user fails to get quote, include reason (such as HIGH_RISK_PROFILE or UNVERIFIED_USER) and user id
+Create schema for: (stuff without numbers in front (i.e. Sign up and Sign In, Quote) are headers, ignore)
+
+
+		Sign up and Sign In		
+1	Welcome_Option_Tapped	event_type	USER_EVENT	record when user select option from welcome page, either join novo community or I Already Have Novo Account
+		event_action	TAP	
+		event_label	Welcome_Option_Tapped	
+		event_metadata	{"option":"SIGN_UP|SIGN_IN"}	
+2	Signup_Success	event_type	USER_EVENT	record when user sign up safe start account successfully
+		event_action	TAP	
+		event_label	Signup_Success	
+		event_metadata		
+3	Signup_Fail	event_type	USER_EVENT	record when user sign up failure
+		event_action	TAP	
+		event_label	Signup_Fail	
+		event_metadata	{"error_message":""}	
+4	Signup_SwitchTo_Signin	event_type	USER_EVENT	record when user sign up switch to sign in because account already exists
+		event_action	TAP	
+		event_label	Signup_SwitchTo_Signin	
+		event_metadata		
+5	Transition_FromSafeStart_ToPH	event_type	USER_EVENT	recorded when UI shows the first page of safe start user transition pages to post bind
+		event_action	TAP	
+		event_label	Transition_FromSafeStart_ToPH	
+		event_metadata	/	
+				
+		Quote		
+6	Launch_Q2B	event_type	USER_EVENT	record when user click on quote card to load Q2B pages
+		event_action	TAP	
+		event_label	Launch_Q2B	
+		event_metadata	/	
+				
+				
+7	Quote_Ready	event_type	USER_EVENT	"record when user first time got a quote display on the card, should including the following, 
+quote_premium(initial, monthly), score, estimated_annual_mileage"
+		event_action	TAP	
+		event_label	Quote_Ready	
+		event_metadata	{"quote_premium":{"initial":200, "monthly":160}, "score":85, "estimated_annual_mileage": 8000 }	
+8	Quote_Rejected	event_type	USER_EVENT	"record when user fail to get a quote, should including the details, 
+Reason(HIGH_RISK_PROFILE | UNVERIFIED_USER)"
+		event_action	TAP	
+		event_label	Quote_Rejected	
+		event_metadata	{"reason":"", "message":"" }	
+2-Jul	Quote_Updated	event_type	USER_EVENT	"record when user got a quote updated display on the card, should including the following, 
+quote_premium(initial, monthly), score, estimated_annual_mileage"
+		event_action	TAP	
+		event_label	Quote_Updated	
+		event_metadata	{"quote_premium":{"initial":200, "monthly":160}, "score":85, "estimated_annual_mileage": 8000 }	
+				
+				
+		Update PII and Vehicle - FTUE/Where Is My Quote		
+9	Add_DoB	event_type	USER_EVENT	record when user complete add DoB
+		event_action	TAP	
+		event_label	Add_DoB	
+		event_metadata	/	
+10	Add_Vehicle	event_type	USER_EVENT	record when user click to enter make, model or year, including  vehicle detail(MAKE|MODEL|YEAR)
+		event_action	TAP	
+		event_label	Add_Vehicle	
+		event_metadata	{"vehicle_detail": "MAKE|MODEL|YEAR"}	
+11	Vehicle_Equipped_Check	event_type	USER_EVENT	record when user select whether support for BT when model year between 2008-2016
+		event_action	TAP	
+		event_label	Vehicle_Equipped_Check	
+		event_metadata	{"Equipped":ture|false}	
+12	Confirm_Vehicle_Info	event_type	USER_EVENT	record when user click to confirm vehicle and driver  information
+		event_action	TAP	
+		event_label	Confirm_Vehicle_Info	
+		event_metadata		
+13	Edit_Vehicle	event_type	USER_EVENT	record when user click to edit make, model, year in confirm page, including vehicle detail(MAKE|MODEL|YEAR)
+		event_action	TAP	
+		event_label	Edit_Vehicle	
+		event_metadata	{"vehicle_details":"MAKE|MODEL|YEAR"}	
+14	Edit_Name	event_type	USER_EVENT	record when user click to edit first and last name from confirmation page, event should including  name detail(FIRST_NAME|LAST_NAME)
+		event_action	TAP	
+		event_label	Edit_Name	
+		event_metadata	{"name_detail": "FIRST_NAME|LAST_NAME"}	
+15	Edit_DoB	event_type	USER_EVENT	record when user click to edit DoB from confirmation page
+		event_action	TAP	
+		event_label	Edit_DoB	
+		event_metadata	/	
+16	Add_Name	event_type	USER_EVENT	record when user click to enter first and last name, event should including  name_detail(FIRST_NAME|LAST_NAME)
+		event_action	TAP	
+		event_label	Add_Name	
+		event_metadata	{"name_detail": "FIRST_NAME|LAST_NAME"}	
+17	Add_Home_Address	event_type	USER_EVENT	record when user click to enter home address, event should including  ADDRESS_DETAIL(ADDRESS|APT|ZIP_CODE)
+		event_action	TAP	
+		event_label	Add_Home_Address	
+		event_metadata	{"address_detail": "ADDRESS|APT|ZIP_CODE"}	
+18	QuoteStatus_Score_Not_Ready	event_type	USER_EVENT	record when show dialog if score not ready after user finish PII and vehicle info and confirm
+		event_action	TAP	
+		event_label	QuoteStatus_Score_Not_Ready	
+		event_metadata		
+19	Vehilce_Not_Eligible	event_type	USER_EVENT	record after confirm model year is not supported and show error message, which could be "YEAR_NOT_ELIGIBLE|BT_NOT_SUPPORTED|MODEL_NOT_SUPPORTED"
+		event_action	TAP	
+		event_label	Vehilce_Not_Eligible	
+		event_metadata	{"error_message":"***"}	
+20	Driver_Not_Eligible	event_type	USER_EVENT	record after confirm DoB is not supported and show error message
+		event_action	TAP	
+		event_label	Driver_Not_Eligible	
+		event_metadata	/	
+				
+				
+				
+		Discount Simulator		
+21	Discount_Simulator_Clicked	event_type	USER_EVENT	record when user click from home page to load discount simulator
+		event_action	TAP	
+		event_label	Discount_Simulator_Clicked	
+		event_metadata	/	
+22	Discount_Simulator_FTUE_Shown	event_type	USER_EVENT	record when the FTUE pop up show on the slide bar in discount simulator page
+		event_action	TAP	
+		event_label	Discount_Simulator_FTUE_Shown	
+		event_metadata	/	
+23	Discount_Simulator_FTUE_Dismiss	event_type	USER_EVENT	record when the FTUE pop up dismiss on the slide bar in discount simulator page
+		event_action	TAP	
+		event_label	Discount_Simulator_FTUE_Dismiss	
+		event_metadata	/	
+24	Drag_Discount_Simulator	event_type	USER_EVENT	record when the user start draging discount simulator slider, record new event when the direction changes
+		event_action	TAP	
+		event_label	Drag_Discount_Simulator	
+		event_metadata	{"direction":"LEFT|RIGHT"}	
+				
+				
+		Home - Videos		
+25	Video_Play_{index}	event_type	USER_EVENT	record when user click on play button on the video in home page, index is for the 3 files, with 1,2,3
+		event_action	TAP	
+		event_label	Video_Play_{index}	
+		event_metadata	{"index":1|2|3}	
+26	Video_Pause_{index}	event_type	USER_EVENT	record when user click on pause button on the video in home page, index is for the 3 files, with 1,2,3
+		event_action	TAP	
+		event_label	Video_Pause_{index}	
+		event_metadata	{"index":1|2|3}	
+27	Video_Unmute_{index}	event_type	USER_EVENT	record when user click on unmute button on the video, index is for the 3 files, with 1,2,3
+		event_action	TAP	
+		event_label	Video_Unmute_{index}	
+		event_metadata	{"index":1|2|3}	
+28	Video_Mute_{index}	event_type	USER_EVENT	record when user click on mute button on the video, index is for the 3 files, with 1,2,3
+		event_action	TAP	
+		event_label	Video_Mute_{index}	
+				
+		event_metadata	{"index":1|2|3}	
+29	Video_FullScreen_{index}	event_type	USER_EVENT	"record when user click on button to load video in full screen mode, index is for the 3 files, with 1,2,3
+"
+		event_action	TAP	
+		event_label	Video_FullScreen_{index}	
+				
+		event_metadata	{"index":1|2|3}	
+30	Video_ExitFullScreen_{index}	event_type	USER_EVENT	"record when user click on button to load video exit full screen mode, index is for the 3 files, with 1,2,3
+"
+		event_action	TAP	
+		event_label	Video_ExitFullScreen_{index}	
+				
+		event_metadata	{"index":1|2|3}	
+				
+		Home - Where Is My Quote		
+31	Where_Is_Quote_Clicked	event_type	USER_EVENT	record when user click on where is my quote and show the pop up of the progress of my quote.
+		event_action	TAP	
+		event_label	Where_Is_Quote_Clicked	
+		event_metadata	/	
+32	Quote_CompletePII_Clicked	event_type	USER_EVENT	record when user click on complete profile from where is my quote progress page
+		event_action	TAP	
+		event_label	Quote_CompletePII_Clicked	
+		event_metadata	/	
+33	Quote_CompleteSetup_Clicked	event_type	USER_EVENT	record when user click on complete set up from where is my quote progress page
+		event_action	TAP	
+		event_label	Quote_CompleteSetup_Clicked	
+		event_metadata	/	
+				
+		Consent		
+34	SafeStart_Consent_SyncSuccessful	event_type	USER_EVENT	record the event if user consent of safe start upload to server successfully
+		event_action	TAP	
+		event_label	SafeStart_Consent_SyncSuccessful	
+		event_metadata	/	
+35	SafeStart_Consent_SyncFailure	event_type	USER_EVENT	record the event if user consent of safe start upload to server failed
+		event_action	TAP	
+		event_label	SafeStart_Consent_SyncFailure	
+		event_metadata	/	
+				
+				
+		For AppsFlyer		
+36	Complete_Permission_Setup	event_type	USER_EVENT	record the event if user complete permission set up only for the first time, android app_id:, ios app_id:
+		event_action	TAP	
+		event_label	Complete_Permission_Setup	
+		event_metadata	{"appsflyer_id":"xxx", "app_id":"com.novo.yyy", "forward_to_appsflyer": true}	
+37	Complete_BT_Setup	event_type	USER_EVENT	record the event if user complete BT set up
+		event_action	TAP	
+		event_label	Complete_BT_Setup	
+		event_metadata	{"appsflyer_id":"xxx", "app_id":"com.novo.yyy", "forward_to_appsflyer": true}	
+38	First_MatchedTrip_Display	event_type	USER_EVENT	record the event if user see first trip on count down
+		event_action	TAP	
+		event_label	First_MatchedTrip_Display	
+		event_metadata	{"appsflyer_id":"xxx", "app_id":"com.novo.yyy", "forward_to_appsflyer": true}	
+39	Score_Ready	event_type	USER_EVENT	record the event if user first time see the score
+		event_action	TAP	
+		event_label	Score_Ready	
+		event_metadata	{"appsflyer_id":"xxx", "app_id":"com.novo.yyy", "forward_to_appsflyer": true}	

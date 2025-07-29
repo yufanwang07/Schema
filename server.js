@@ -38,17 +38,26 @@ const backupDir = './backups';
 // Function to create a backup
 const createBackup = async () => {
     const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, ''); // YYYY-MM-DDTHH-mm-ss
-    const fileName = `${backupDir}/schemas_backup_${timestamp}.json`;
+    const versionedFileName = `${backupDir}/schemas_backup_${timestamp}.json`;
+    const primaryFileName = './schemas_backup.json';
+
     try {
-        await fs.writeFile(fileName, JSON.stringify(storedSchemas, null, 2));
-        console.log(`Server data backed up to ${fileName}`);
+        const dataToBackup = JSON.stringify(storedSchemas, null, 2);
+        // Write to the versioned backup file
+        await fs.writeFile(versionedFileName, dataToBackup);
+        console.log(`Server data backed up to ${versionedFileName}`);
+
+        // Write to the primary backup file
+        await fs.writeFile(primaryFileName, dataToBackup);
+        console.log(`Server data backed up to ${primaryFileName}`);
+
         await cleanOldBackups();
     } catch (err) {
         console.error('Error writing backup file:', err);
     }
 };
 
-// Function to clean old backups, keeping only the last 24
+// Function to clean old backups, keeping only the last 10
 const cleanOldBackups = async () => {
     try {
         const files = await fs.readdir(backupDir);
@@ -61,8 +70,8 @@ const cleanOldBackups = async () => {
         }
         backupFiles.sort((a, b) => b.time - a.time); // Sort by modification time, newest first
 
-        if (backupFiles.length > 24) {
-            for (let i = 24; i < backupFiles.length; i++) {
+        if (backupFiles.length > 10) {
+            for (let i = 10; i < backupFiles.length; i++) {
                 const fileToDelete = `${backupDir}/${backupFiles[i].name}`;
                 try {
                     await fs.unlink(fileToDelete);
@@ -80,50 +89,30 @@ const cleanOldBackups = async () => {
 // Function to load the latest backup on server start
 const loadLatestBackup = async () => {
     try {
-        const files = await fs.readdir(backupDir);
-        const backupFiles = [];
-        for (const file of files) {
-            if (file.startsWith('schemas_backup_') && file.endsWith('.json')) {
-                const stats = await fs.stat(`${backupDir}/${file}`);
-                backupFiles.push({ name: file, time: stats.mtime.getTime() });
-            }
-        }
-        backupFiles.sort((a, b) => b.time - a.time); // Sort by modification time, newest first
-
-        if (backupFiles.length > 0) {
-            const latestBackup = `${backupDir}/${backupFiles[0].name}`;
-            try {
-                const backupData = JSON.parse(await fs.readFile(latestBackup, 'utf8'));
-                storedSchemas.splice(0, storedSchemas.length, ...backupData); // Clear and replace with backup data
-                console.log(`Loaded latest backup from ${latestBackup}`);
-                lastRestoreTimestamp = new Date().toISOString();
-                console.log('Server has been reverted to the state of this backup.');
-            } catch (error) {
-                console.error(`Error loading backup file ${latestBackup}:`, error);
-                lastRestoreTimestamp = null; // Ensure it's null if loading fails
-            }
-        } else {
-            console.log('No existing backups found. Starting with an empty state.');
-            lastRestoreTimestamp = null; // Ensure it's null if no backups exist
-        }
-    } catch (err) {
-        console.error('Error reading backup directory:', err);
+        const backupData = JSON.parse(await fs.readFile('./schemas_backup.json', 'utf8'));
+        storedSchemas.splice(0, storedSchemas.length, ...backupData); // Clear and replace with backup data
+        console.log(`Loaded latest backup from ./schemas_backup.json`);
+        lastRestoreTimestamp = new Date().toISOString();
+        console.log('Server has been reverted to the state of this backup.');
+    } catch (error) {
+        console.error(`Error loading backup file ./schemas_backup.json:`, error);
+        lastRestoreTimestamp = null; // Ensure it's null if loading fails
     }
 };
 
 // Endpoint to save a schema
 app.post('/api/schemas', (req, res) => {
-    const { id, name, filledSchema } = req.body;
+    const { id, name, filledSchema, implemented } = req.body;
     if (!id || !name || !filledSchema) {
         return res.status(400).json({ error: 'id, name, and filledSchema are required' });
     }
     // Check if schema with same ID already exists and update it
     const existingIndex = storedSchemas.findIndex(s => s.id === id);
     if (existingIndex > -1) {
-        storedSchemas[existingIndex] = { id, name, filledSchema };
+        storedSchemas[existingIndex] = { id, name, filledSchema, implemented };
         console.log(`Updated schema with ID: ${id}`);
     } else {
-        storedSchemas.push({ id, name, filledSchema });
+        storedSchemas.push({ id, name, filledSchema, implemented });
         console.log(`Saved new schema with ID: ${id}`);
     }
     res.status(200).json({ message: 'Schema saved successfully' });
@@ -155,6 +144,24 @@ app.delete('/api/schemas/:id', (req, res) => {
     }
 });
 
+// Endpoint to update the implementation status of a schema
+app.put('/api/schemas/:id/implemented', (req, res) => {
+    const { id } = req.params;
+    const { implemented } = req.body;
+
+    const schemaIndex = storedSchemas.findIndex(s => s.id == id);
+
+    if (schemaIndex > -1) {
+        storedSchemas[schemaIndex].implemented = implemented;
+        console.log(`Updated implementation status for schema with ID: ${id} to ${implemented}`);
+        res.status(200).json({ message: 'Implementation status updated successfully' });
+    } else {
+        res.status(404).json({ error: 'Schema not found' });
+    }
+});
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 app.post('/api/batch-schemas', async (req, res) => {
     const { content } = req.body;
     if (!content) {
@@ -162,7 +169,7 @@ app.post('/api/batch-schemas', async (req, res) => {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
         const prompt = `Given the following text, please split it into a list of distinct descriptions for creating separate event schemas. Each description should be a self-contained unit. Return the descriptions as a JSON array of strings. For example, if the input is "Create a schema for a user profile with name and email. Also, create a schema for a product with name and price.", the output should be ["Create a schema for a user profile with name and email.", "Create a schema for a product with name and price."]. Input text: ${content}`;
 
         const result = await model.generateContent(prompt);
@@ -170,7 +177,8 @@ app.post('/api/batch-schemas', async (req, res) => {
         const text = response.text();
         
         const descriptions = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
-        const newChats = [];
+        
+        res.setHeader('Content-Type', 'application/json');
 
         for (const description of descriptions) {
             const newChat = {
@@ -197,19 +205,25 @@ app.post('/api/batch-schemas', async (req, res) => {
                 newChat.filledSchema = schema || null;
                 newChat.messages.push({ role: 'assistant', content: explanation });
             }
-            newChats.push(newChat);
+            res.write(JSON.stringify(newChat) + '\n');
+            await delay(4000);
         }
 
-        res.status(200).json(newChats);
+        res.end();
     } catch (error) {
         console.error('Error during batch schema creation:', error);
-        res.status(500).json({ error: 'Failed to process batch schema creation' });
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to process batch schema creation' });
+        }
     }
 });
 
-async function generateSchemaForPrompt(schema, prompt, conversationHistory) {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-    const systemPrompt = `
+async function generateSchemaForPrompt(schema, prompt, conversationHistory, useCodeAgent) {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    let systemPrompt;
+    if (useCodeAgent) {
+        systemPrompt = `
 You are an intelligent assistant for generating and refining JSON schemas and modifying code. Your goal is to help the user create a valid JSON object based on a provided schema, answer questions, or modify code.
 You have three main capabilities:
 1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object.
@@ -245,7 +259,7 @@ You MUST respond with a JSON object containing two fields: "action" and "payload
         "action": "code_agent",
         "payload": {
             "prompt": "The user's prompt to be sent to the code agent.",
-            "explanation": "A brief explanation of what you are about to do. Assume code agent is a part of you, so just return like Adding ___ to ___..."
+            "explanation": "A brief explanation of what you are about to do. Don't mention the code agent in your response, just say like 'Adding ___...'"
         }
     }
     \`\`\`
@@ -262,6 +276,49 @@ ${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
 ${prompt}
 If calling code agent, DO NOT SAY YOU CANNOT MODIFY CODE, BECAUSE YOU CAN BY RUNNING CODE AGENT. ONLY CALL THE CODE AGENT IF THE PROMPT HAS NOTHING TO DO WITH GENERATING SCHEMA OR LOGGING. The code is provided directly to code agent, not you. Just forward user's request directly to code agent.
 `;
+    } else {
+        systemPrompt = `
+You are an intelligent assistant for generating and refining JSON schemas. Your goal is to help the user create a valid JSON object based on a provided schema or answer questions.
+You have two main capabilities:
+1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object.
+2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema, you will provide a helpful text-based answer.
+
+Analyze the user's prompt and the conversation history to determine the correct action.
+
+**Response Format:**
+You MUST respond with a JSON object containing two fields: "action" and "payload".
+-   If you are updating the schema, the format is:
+    \`\`\`json
+    {
+      "action": "update_schema",
+      "payload": {
+        "schema": { ... the new JSON object ... },
+        "explanation": "A brief explanation of the changes you made."
+      }
+    }
+    \`\`\`
+-   If you are answering a question, the format is:
+    \`\`\`json
+    {
+      "action": "answer_question",
+      "payload": {
+        "answer": "Your helpful and informative answer."
+      }
+    }
+    \`\`\`
+
+**IMPORTANT:**
+-   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.
+-   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result
+-   Base your response on the provided schema and the user's latest prompt.
+**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**
+${schema}
+**Conversation History:**
+${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+**User's Prompt:**
+${prompt}
+`;
+    }
 
     const result = await model.generateContent(systemPrompt);
     const response = await result.response;
@@ -272,13 +329,13 @@ If calling code agent, DO NOT SAY YOU CANNOT MODIFY CODE, BECAUSE YOU CAN BY RUN
 
 app.post('/api/generate', async (req, res) => {
     try {
-        const { schema, prompt, conversationHistory } = req.body;
+        const { schema, prompt, conversationHistory, useCodeAgent } = req.body;
 
         if (!prompt) {
             return res.status(400).json({ error: 'Prompt is required' });
         }
 
-        const result = await generateSchemaForPrompt(schema, prompt, conversationHistory);
+        const result = await generateSchemaForPrompt(schema, prompt, conversationHistory, useCodeAgent);
         res.json(result);
     } catch (error) {
         console.error('Error generating response:', error);
@@ -551,7 +608,7 @@ app.post('/api/inject-logging', async (req, res) => {
 You should only return the relative paths of these relevant subfolders, one per line. Do not include files directly under 'domain/' or 'ui/' directories, only their subfolders.\nIf no subfolders are relevant, return an empty array.\n\nExample Output:\n[\n  "src/domain/users/models",\n  "frontend/ui/components/buttons"\n]\n\nFile Structure:\n\`\`\`\n${fullFileStructure}\n\`\`\`\n`;
         initialPrompt = initialPrompt.replace("\"", "\'")
 try {
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Using a capable model for this step
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // Using a capable model for this step
             const result = await model.generateContent(initialPrompt);
             const response = await result.response;
             const text = response.text();

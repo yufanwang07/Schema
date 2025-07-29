@@ -1,1 +1,547 @@
-[]
+[
+  {
+    "id": 1753807986782.8247,
+    "name": "Welcome Option Tapped",
+    "filledSchema": {
+      "event_name": "Welcome_Option_Tapped",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Welcome_Option_Tapped",
+      "event_description": "Event recorded when user taps on either SIGN_UP or SIGN_IN option on the welcome screen.",
+      "event_metadata": {
+        "option": "SIGN_UP|SIGN_IN"
+      }
+    }
+  },
+  {
+    "id": 1753807992542.5632,
+    "name": "Signup Success",
+    "filledSchema": {
+      "event_name": "Signup_Success",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Signup_Success",
+      "event_description": "Event logged when a user successfully signs up.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753807998568.2832,
+    "name": "Signup Fail",
+    "filledSchema": {
+      "event_name": "Signup_Fail",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Signup_Fail",
+      "event_description": "Event logged when a user fails to sign up.",
+      "event_metadata": {
+        "error_message": ""
+      }
+    }
+  },
+  {
+    "id": 1753808003951.339,
+    "name": "Signup SwitchTo Signin",
+    "filledSchema": {
+      "event_name": "Signup_SwitchTo_Signin",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Signup_SwitchTo_Signin",
+      "event_description": "Event logged when a user taps the 'Switch to Sign-in' button on the signup page.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808010215.4773,
+    "name": "Transition FromSafeStart ToPH",
+    "filledSchema": {
+      "event_name": "Transition_FromSafeStart_ToPH",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Transition_FromSafeStart_ToPH",
+      "event_description": "Event logged when user transitions from Safe Start to PH.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808016740.9443,
+    "name": "Launch Q2B",
+    "filledSchema": {
+      "event_name": "Launch_Q2B",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Launch_Q2B",
+      "event_description": "Event recorded when the user taps the button to launch Q2B.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808022376.768,
+    "name": "Quote Ready",
+    "filledSchema": {
+      "event_name": "Quote_Ready",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Quote_Ready",
+      "event_description": "Event logged when a user is presented with a ready quote.",
+      "event_metadata": {
+        "quote_premium": {
+          "initial": 200,
+          "monthly": 160
+        },
+        "score": 85,
+        "estimated_annual_mileage": 8000
+      }
+    }
+  },
+  {
+    "id": 1753808030195.2104,
+    "name": "Quote Rejected",
+    "filledSchema": {
+      "event_name": "Quote_Rejected",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Quote_Rejected",
+      "event_description": "Event logged when a user rejects a quote.",
+      "event_metadata": {
+        "reason": "",
+        "message": ""
+      }
+    }
+  },
+  {
+    "id": 1753808035697.949,
+    "name": "Quote Updated",
+    "filledSchema": {
+      "event_name": "Quote_Updated",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Quote_Updated",
+      "event_description": "Event logged when a user updates their quote details.",
+      "event_metadata": {
+        "quote_premium": {
+          "initial": 200,
+          "monthly": 160
+        },
+        "score": 85,
+        "estimated_annual_mileage": 8000
+      }
+    }
+  },
+  {
+    "id": 1753808041942.824,
+    "name": "Add DoB",
+    "filledSchema": {
+      "event_name": "Add_DoB",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Add_DoB",
+      "event_description": "Event logged when the user adds their Date of Birth.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808047480.4426,
+    "name": "Add Vehicle",
+    "filledSchema": {
+      "event_name": "Add_Vehicle",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Add_Vehicle",
+      "event_description": "Event logged when user adds a vehicle.",
+      "event_metadata": {
+        "vehicle_detail": "MAKE|MODEL|YEAR"
+      }
+    }
+  },
+  {
+    "id": 1753808052873.8145,
+    "name": "Vehicle Equipped Check",
+    "filledSchema": {
+      "event_name": "Vehicle_Equipped_Check",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Vehicle_Equipped_Check",
+      "event_description": "Event logged when user checks if vehicle is equipped.",
+      "event_metadata": {
+        "Equipped": true
+      }
+    }
+  },
+  {
+    "id": 1753808058443.8083,
+    "name": "Confirm Vehicle Info",
+    "filledSchema": {
+      "event_name": "Confirm_Vehicle_Info",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Confirm_Vehicle_Info",
+      "event_description": "Event logged when the user confirms their vehicle information.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808063837.2366,
+    "name": "Edit Vehicle",
+    "filledSchema": {
+      "event_name": "Edit_Vehicle",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Edit_Vehicle",
+      "event_description": "Event logged when user taps on the Edit Vehicle button to modify vehicle details.",
+      "event_metadata": {
+        "vehicle_details": "MAKE|MODEL|YEAR"
+      }
+    }
+  },
+  {
+    "id": 1753808071649.647,
+    "name": "Edit Name",
+    "filledSchema": {
+      "event_name": "Edit_Name",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Edit_Name",
+      "event_description": "Event logged when user taps to edit their name.",
+      "event_metadata": {
+        "name_detail": "FIRST_NAME|LAST_NAME"
+      }
+    }
+  },
+  {
+    "id": 1753808077108.7122,
+    "name": "Edit DoB",
+    "filledSchema": {
+      "event_name": "Edit_DoB",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Edit_DoB",
+      "event_description": "Event logged when the user taps to edit their Date of Birth.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808082597.7644,
+    "name": "Add Name",
+    "filledSchema": {
+      "event_name": "Add_Name",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Add_Name",
+      "event_description": "Event logged when user adds a name to the system.",
+      "event_metadata": {
+        "name_detail": "FIRST_NAME|LAST_NAME"
+      }
+    }
+  },
+  {
+    "id": 1753808088130.0947,
+    "name": "Add Home Address",
+    "filledSchema": {
+      "event_name": "Add_Home_Address",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Add_Home_Address",
+      "event_description": "Event logged when user adds a home address.",
+      "event_metadata": {
+        "address_detail": "ADDRESS|APT|ZIP_CODE"
+      }
+    }
+  },
+  {
+    "id": 1753808094466.9968,
+    "name": "QuoteStatus Score Not Ready",
+    "filledSchema": {
+      "event_name": "QuoteStatus_Score_Not_Ready",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "QuoteStatus_Score_Not_Ready",
+      "event_description": "Event logged when the user interacts with a UI element indicating the quote score is not ready.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808100216.5571,
+    "name": "Vehilce Not Eligible",
+    "filledSchema": {
+      "event_name": "Vehilce_Not_Eligible",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Vehilce_Not_Eligible",
+      "event_description": "Event logged when a vehicle is deemed ineligible.",
+      "event_metadata": {
+        "error_message": "***"
+      }
+    }
+  },
+  {
+    "id": 1753808105736.5356,
+    "name": "Driver Not Eligible",
+    "filledSchema": {
+      "event_name": "Driver_Not_Eligible",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Driver_Not_Eligible",
+      "event_description": "Event logged when a driver is deemed ineligible.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808112694.1382,
+    "name": "Discount Simulator Clicked",
+    "filledSchema": {
+      "event_name": "Discount_Simulator_Clicked",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Discount_Simulator_Clicked",
+      "event_description": "Event logged when the user clicks on the Discount Simulator button.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808121209.6782,
+    "name": "Discount Simulator FTUE Shown",
+    "filledSchema": {
+      "event_name": "Discount_Simulator_FTUE_Shown",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Discount_Simulator_FTUE_Shown",
+      "event_description": "Event logged when the Discount Simulator First-Time User Experience (FTUE) is shown to the user.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808127618.4905,
+    "name": "Discount Simulator FTUE Dismiss",
+    "filledSchema": {
+      "event_name": "Discount_Simulator_FTUE_Dismiss",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Discount_Simulator_FTUE_Dismiss",
+      "event_description": "Event logged when the user dismisses the Discount Simulator First Time User Experience (FTUE).",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808134605.393,
+    "name": "Drag Discount Simulator",
+    "filledSchema": {
+      "event_name": "Drag_Discount_Simulator",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Drag_Discount_Simulator",
+      "event_description": "Event recorded when user interacts with the drag discount simulator.",
+      "event_metadata": {
+        "direction": "LEFT|RIGHT"
+      }
+    }
+  },
+  {
+    "id": 1753808140841.4268,
+    "name": "Video Play {index}",
+    "filledSchema": {
+      "event_name": "Video_Play_{index}",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Video_Play_{index}",
+      "event_description": "Event logged when a user taps to play a video.",
+      "event_metadata": {
+        "index": 1
+      }
+    }
+  },
+  {
+    "id": 1753808146566.2798,
+    "name": "Video Pause {index}",
+    "filledSchema": {
+      "event_name": "Video_Pause_{index}",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Video_Pause_{index}",
+      "event_description": "Event logged when a user pauses a video.  The index indicates which video was paused.",
+      "event_metadata": {
+        "index": 1
+      }
+    }
+  },
+  {
+    "id": 1753808152327.8276,
+    "name": "Video Unmute {index}",
+    "filledSchema": {
+      "event_name": "Video_Unmute_{index}",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Video_Unmute_{index}",
+      "event_description": "Event logged when user unmutes a video. The index represents the video stream ID.",
+      "event_metadata": {
+        "index": 1
+      }
+    }
+  },
+  {
+    "id": 1753808162341.6255,
+    "name": "Video Mute {index}",
+    "filledSchema": {
+      "event_name": "Video_Mute_{index}",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Video_Mute_{index}",
+      "event_description": "Event recorded when user taps the mute/unmute video button.  Index indicates which video stream.",
+      "event_metadata": {
+        "index": 1
+      }
+    }
+  },
+  {
+    "id": 1753808167935.4036,
+    "name": "Video FullScreen {index}",
+    "filledSchema": {
+      "event_name": "Video_FullScreen_{index}",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Video_FullScreen_{index}",
+      "event_description": "User tapped to enable/disable fullscreen for video player.  Index indicates which video player.",
+      "event_metadata": {
+        "index": 1
+      }
+    }
+  },
+  {
+    "id": 1753808173557.87,
+    "name": "Video ExitFullScreen 1",
+    "filledSchema": {
+      "event_name": "Video_ExitFullScreen_1",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Video_ExitFullScreen_1",
+      "event_description": "User exited fullscreen mode for video player.  Index indicates which video player.",
+      "event_metadata": {
+        "index": 1
+      }
+    }
+  },
+  {
+    "id": 1753808183489.286,
+    "name": "Where Is Quote Clicked",
+    "filledSchema": {
+      "event_name": "Where_Is_Quote_Clicked",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Where_Is_Quote_Clicked",
+      "event_description": "Event logged when user clicks on 'Where is my quote?' button.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808188971.861,
+    "name": "Quote CompletePII Clicked",
+    "filledSchema": {
+      "event_name": "Quote_CompletePII_Clicked",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Quote_CompletePII_Clicked",
+      "event_description": "Event logged when the user clicks the button to complete PII information for a quote.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808196188.6643,
+    "name": "Quote CompleteSetup Clicked",
+    "filledSchema": {
+      "event_name": "Quote_CompleteSetup_Clicked",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Quote_CompleteSetup_Clicked",
+      "event_description": "Event logged when the user clicks the 'Complete Setup' button on the quote page.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808201714.1006,
+    "name": "SafeStart Consent SyncSuccessful",
+    "filledSchema": {
+      "event_name": "SafeStart_Consent_SyncSuccessful",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "SafeStart_Consent_SyncSuccessful",
+      "event_description": "Event logged when user successfully syncs their consent preferences with SafeStart.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808208933.3186,
+    "name": "SafeStart Consent SyncFailure",
+    "filledSchema": {
+      "event_name": "SafeStart_Consent_SyncFailure",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "SafeStart_Consent_SyncFailure",
+      "event_description": "Event recorded when SafeStart consent synchronization fails due to a user action.",
+      "event_metadata": {}
+    }
+  },
+  {
+    "id": 1753808214549.3918,
+    "name": "Complete Permission Setup",
+    "filledSchema": {
+      "event_name": "Complete_Permission_Setup",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Complete_Permission_Setup",
+      "event_description": "Event logged when user completes the permission setup process.",
+      "event_metadata": {
+        "appsflyer_id": "xxx",
+        "app_id": "com.novo.yyy",
+        "forward_to_appsflyer": true
+      }
+    }
+  },
+  {
+    "id": 1753808220278.2861,
+    "name": "Complete BT Setup",
+    "filledSchema": {
+      "event_name": "Complete_BT_Setup",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Complete_BT_Setup",
+      "event_description": "Event logged when user completes Bluetooth setup.",
+      "event_metadata": {
+        "appsflyer_id": "xxx",
+        "app_id": "com.novo.yyy",
+        "forward_to_appsflyer": true
+      }
+    }
+  },
+  {
+    "id": 1753808227743.2576,
+    "name": "First MatchedTrip Display",
+    "filledSchema": {
+      "event_name": "First_MatchedTrip_Display",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "First_MatchedTrip_Display",
+      "event_description": "Event logged when the first matched trip is displayed to the user.",
+      "event_metadata": {
+        "appsflyer_id": "xxx",
+        "app_id": "com.novo.yyy",
+        "forward_to_appsflyer": true
+      }
+    }
+  },
+  {
+    "id": 1753808233508.2942,
+    "name": "Score Ready",
+    "filledSchema": {
+      "event_name": "Score_Ready",
+      "event_type": "USER_EVENT",
+      "event_action": "TAP",
+      "event_label": "Score_Ready",
+      "event_description": "Event logged when the user is ready to view their score.",
+      "event_metadata": {
+        "appsflyer_id": "xxx",
+        "app_id": "com.novo.yyy",
+        "forward_to_appsflyer": true
+      }
+    }
+  }
+]
