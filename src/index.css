@@ -87,3 +87,35 @@
         transform: scale(1.0);
     }
 }
+
+@keyframes flash-green {
+    50% { background-color: #22c55e; } /* green-500 */
+}
+
+.flash-green {
+    animation: flash-green 1s ease-out;
+}
+
+@keyframes flash-red {
+    50% { background-color: #ef4444; } /* red-500 */
+}
+
+.flash-red {
+    animation: flash-red 1s ease-out;
+}
+
+@keyframes flash-green {
+    50% { background-color: #22c55e; } /* green-500 */
+}
+
+.flash-green {
+    animation: flash-green 1s ease-out;
+}
+
+@keyframes flash-red {
+    50% { background-color: #ef4444; } /* red-500 */
+}
+
+.flash-red {
+    animation: flash-red 1s ease-out;
+}

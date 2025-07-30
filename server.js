@@ -219,14 +219,14 @@ app.post('/api/batch-schemas', async (req, res) => {
 });
 
 async function generateSchemaForPrompt(schema, prompt, conversationHistory, useCodeAgent) {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     let systemPrompt;
     if (useCodeAgent) {
         systemPrompt = `
 You are an intelligent assistant for generating and refining JSON schemas and modifying code. Your goal is to help the user create a valid JSON object based on a provided schema, answer questions, or modify code.
 You have three main capabilities:
-1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object.
+1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object. If you are provided with a generalized structure/no other conversational history, make sure to FILL OUT THE SCHEMA and not update the structure with default values or something similar.
 2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema or code, you will provide a helpful text-based answer.
 3.  **Code Agent**: If the user's prompt is about directly modifying code that doesn't have to do with logging or involves editing code, or something that seems to imply it (not related to logging-for stuff that seems ambiguous still assume the user wants to create a schema for that event), you will call the appropriate CLI to modify code.
 
@@ -467,7 +467,104 @@ app.post('/api/code-agent', async (req, res) => {
     }
 });
 
-app.post('/api/backup-server', (req, res) => {
+app.post('/api/validate-implementation', async (req, res) => {
+    const { schema, files, useClaude, useCli } = req.body;
+    console.log("received");
+    if (!schema || !files || !Array.isArray(files)) {
+        return res.status(400).json({ error: 'Schema and an array of files are required' });
+    }
+
+    const userFilesDir = path.join(__dirname, 'USER_FILES');
+
+    try {
+        await fs.rm(userFilesDir, { recursive: true, force: true });
+        await fs.mkdir(userFilesDir, { recursive: true });
+        console.log("cleaned");
+
+        for (const file of files) {
+            const filePath = path.join(userFilesDir, file.filePath);
+            const dirName = path.dirname(filePath);
+            await fs.mkdir(dirName, { recursive: true });
+            await fs.writeFile(filePath, file.content);
+        }
+
+        const metadataString = JSON.stringify(schema || {});
+        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. Schema: ${metadataString}.`;
+
+        let cliCommand, cliName, cliArgs;
+        if (useClaude) {
+            cliName = 'Claude';
+            cliCommand = 'claude';
+            cliArgs = ['--dangerously-skip-permissions', `-p "${prompt.replace(/"/g, '\'')}"`];
+        } else {
+            cliName = 'Gemini';
+            cliCommand = 'gemini';
+            cliArgs = ['--yolo', `-p "${prompt.replace(/"/g, '\'')}"`];
+        }
+
+        console.log("spawning")
+
+        const child = spawn(cliCommand, cliArgs, {
+            cwd: userFilesDir,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            shell: true,
+            env: process.env,
+        });
+
+        let stdoutData = '';
+        let stderrData = '';
+
+        child.stdout.on('data', chunk => {
+            stdoutData += chunk.toString();
+            console.log('[GEMINI stdout]', chunk.toString());
+        });
+        child.stderr.on('data', chunk => {
+            stderrData += chunk.toString();
+            console.log('[GEMINI stdout]', chunk.toString());
+        });
+
+        child.on('close', async (code) => {
+            if (code !== 0) {
+                console.error(`[${cliName} stderr]:`, stderrData);
+                return res.status(500).json({ error: `${cliName} process exited with an error.`, details: stderrData });
+            }
+
+            try {
+                console.log("parser triggered")
+                const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+                const validationPrompt = `Based on the following response from a previous verification agent, determine if the schema is correctly implemented. The implementation is correct if the event_metadata is logged. An incorrect implementation is not an implementation. Return a JSON object with a single boolean field, "implemented".
+
+Response:
+${stdoutData}`;
+                
+                console.log("generating")
+                const result = await model.generateContent(validationPrompt);
+                
+                console.log("finished generating")
+                const response = result.response;
+                const text = response.text();
+                const jsonResponse = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+                
+                console.log("returning " + text)
+                res.status(200).json(jsonResponse);
+            } catch (error) {
+                console.error('Error validating implementation with Gemini API:', error);
+                res.status(500).json({ error: `Failed to validate implementation with Gemini API: ${error.message}` });
+            }
+        });
+
+        child.on('error', (err) => {
+            console.error(`Failed to start ${cliName}:`, err);
+            res.status(500).json({ error: `Failed to start ${cliName} process: ${err.message}` });
+        });
+
+    } catch (error) {
+        console.error('Error setting up for implementation validation:', error);
+        res.status(500).json({ error: `Failed to set up for implementation validation: ${error.message}` });
+    }
+});
+
+app.post('/api/backup-server', (req, res) => {''
     createBackup(); // Call the backup function
     res.status(200).json({ message: 'Server data backed up successfully' });
 });
@@ -658,7 +755,7 @@ try {
     const fileStructureForMainPrompt = filesToSendToGemini.map(file => file.filePath).join('\n');
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
         const prompt = `You are an AI assistant that helps inject logging functionality into existing codebases. Given a JSON schema, and the contents of its files, you need to generate the necessary code to log data conforming to the schema and integrate it into the correct file(s). The generated code should be idiomatic for the language and framework detected in the file. You must return an array of objects, where each object contains the 'filePath' (relative to the project root) and its 'modifiedContent'. 
         Only include files that you have modified. If no files are modified, return an empty array.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\nFile Structure of the Codebase:\n\`\`\`\n${fileStructureForMainPrompt}\n\`\`\`\n\nContents of Files:\n\`\`\`json\n${JSON.stringify(filesToSendToGemini, null, 0)}\n\`\`\`\n\nInstructions:\n1. Analyze the file structure and contents to identify the most appropriate file(s) for injecting logging functionality. Consider where the data relevant to the schema would be generated or processed.\n2. Generate code that, when inserted into the target file(s), will:\n    - Define a logging function or mechanism that accepts data conforming to the provided schema.\n3. Return an array of JSON objects. Each object must have a 'filePath' (relative to the project root) and 'modifiedContent' field. Only include files that you have modified. If no files are modified, return an empty array.\n\nExample of expected output format:\n\`\`\`json\n[\n  {\n    "filePath": "src/utils/logger.js",\n    "modifiedContent": "// Original content of logger.js\n\nfunction logEvent(data) {\n  console.log('Logging event:', data);\n}\n\n// Example usage\nlogEvent({\n  // ... sample data based on schema ...\n});\n"\n  },\n  {\n    "filePath": "src/components/SomeComponent.js",\n    "modifiedContent": "// Original content of SomeComponent.js\n\n// ... some code ...\n\n// Call the logging function\nlogEvent({\n  // ... relevant data from component ...\n});\n"\n  }\n]\n\`\`\`\n\nNow, provide the array of modified file contents.`
         console.log(prompt.length)
@@ -703,7 +800,7 @@ app.post('/api/inject-novo', async (req, res) => {
         const selectXmlPrompt = `Given the following JSON schema and a list of XML layout filenames, which XML file is most likely related to the event described by the schema? Return only the relative path of the most relevant XML file. If none are relevant, return an empty string.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\nXML Layout Files:\n${xmlFilenames.join('\n')}\n\nReturn the most relevant XML file only and nothing else.`
 
 
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const result = await model.generateContent(selectXmlPrompt);
         const response = await result.response;
         const selectedXmlFileRelativePath = response.text().trim();

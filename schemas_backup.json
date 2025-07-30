@@ -11,7 +11,8 @@
       "event_metadata": {
         "option": "SIGN_UP|SIGN_IN"
       }
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753807992542.5632,
@@ -23,7 +24,8 @@
       "event_label": "Signup_Success",
       "event_description": "Event logged when a user successfully signs up.",
       "event_metadata": {}
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753807998568.2832,
@@ -37,7 +39,8 @@
       "event_metadata": {
         "error_message": ""
       }
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808003951.339,
@@ -49,7 +52,8 @@
       "event_label": "Signup_SwitchTo_Signin",
       "event_description": "Event logged when a user taps the 'Switch to Sign-in' button on the signup page.",
       "event_metadata": {}
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808010215.4773,
@@ -61,7 +65,8 @@
       "event_label": "Transition_FromSafeStart_ToPH",
       "event_description": "Event logged when user transitions from Safe Start to PH.",
       "event_metadata": {}
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808016740.9443,
@@ -73,17 +78,18 @@
       "event_label": "Launch_Q2B",
       "event_description": "Event recorded when the user taps the button to launch Q2B.",
       "event_metadata": {}
-    }
+    },
+    "implemented": false
   },
   {
     "id": 1753808022376.768,
     "name": "Quote Ready",
     "filledSchema": {
       "event_name": "Quote_Ready",
-      "event_type": "USER_EVENT",
-      "event_action": "TAP",
+      "event_type": "SYSTEM_EVENT",
+      "event_action": "AUTOMATIC",
       "event_label": "Quote_Ready",
-      "event_description": "Event logged when a user is presented with a ready quote.",
+      "event_description": "Event logged when a system presents a ready quote.",
       "event_metadata": {
         "quote_premium": {
           "initial": 200,
@@ -92,32 +98,34 @@
         "score": 85,
         "estimated_annual_mileage": 8000
       }
-    }
+    },
+    "implemented": false
   },
   {
     "id": 1753808030195.2104,
     "name": "Quote Rejected",
     "filledSchema": {
       "event_name": "Quote_Rejected",
-      "event_type": "USER_EVENT",
-      "event_action": "TAP",
+      "event_type": "SYSTEM_EVENT",
+      "event_action": "AUTOMATIC",
       "event_label": "Quote_Rejected",
       "event_description": "Event logged when a user rejects a quote.",
       "event_metadata": {
-        "reason": "",
-        "message": ""
+        "reason": "System generated event",
+        "message": "Quote automatically rejected due to system error"
       }
-    }
+    },
+    "implemented": false
   },
   {
     "id": 1753808035697.949,
     "name": "Quote Updated",
     "filledSchema": {
       "event_name": "Quote_Updated",
-      "event_type": "USER_EVENT",
-      "event_action": "TAP",
+      "event_type": "SYSTEM_EVENT",
+      "event_action": "AUTOMATIC",
       "event_label": "Quote_Updated",
-      "event_description": "Event logged when a user updates their quote details.",
+      "event_description": "Event logged when a system updates quote details automatically.",
       "event_metadata": {
         "quote_premium": {
           "initial": 200,
@@ -126,7 +134,8 @@
         "score": 85,
         "estimated_annual_mileage": 8000
       }
-    }
+    },
+    "implemented": false
   },
   {
     "id": 1753808041942.824,
@@ -138,7 +147,8 @@
       "event_label": "Add_DoB",
       "event_description": "Event logged when the user adds their Date of Birth.",
       "event_metadata": {}
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808047480.4426,
@@ -152,7 +162,8 @@
       "event_metadata": {
         "vehicle_detail": "MAKE|MODEL|YEAR"
       }
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808052873.8145,
@@ -166,7 +177,8 @@
       "event_metadata": {
         "Equipped": true
       }
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808058443.8083,
@@ -178,7 +190,8 @@
       "event_label": "Confirm_Vehicle_Info",
       "event_description": "Event logged when the user confirms their vehicle information.",
       "event_metadata": {}
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808063837.2366,
@@ -192,7 +205,8 @@
       "event_metadata": {
         "vehicle_details": "MAKE|MODEL|YEAR"
       }
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808071649.647,
@@ -206,7 +220,8 @@
       "event_metadata": {
         "name_detail": "FIRST_NAME|LAST_NAME"
       }
-    }
+    },
+    "implemented": true
   },
   {
     "id": 1753808077108.7122,

@@ -98,7 +98,7 @@ const Notification = ({ message, type, onDismiss }) => {
         setTimeout(onDismiss, 1500); // Wait for fade-out animation to complete
     };
 
-    const baseClasses = "fixed top-5 right-5 p-4 rounded-md shadow-lg text-white flex items-center border-l-4 transition-opacity duration-1500";
+    const baseClasses = "fixed top-5 right-5 p-4 rounded-md shadow-lg text-white flex items-center border-l-4 transition-opacity duration-1500 z-50";
     const typeClasses = {
         info: "bg-blue-900 border-blue-500",
         success: "bg-green-900 border-green-500",
@@ -106,7 +106,7 @@ const Notification = ({ message, type, onDismiss }) => {
     };
 
     return (
-        <div className={`${baseClasses} ${typeClasses[type]} ${visible ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`${baseClasses} ${typeClasses[type] || ''} ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <span className="flex-grow">{message}</span>
             <button onClick={handleDismiss} className="ml-4 text-white">&times;</button>
         </div>
@@ -144,6 +144,28 @@ const normalizeNewlines = (text) => {
         return '';
     }
     return text.replace(/\r\n|\r/g, '\n');
+};
+
+const stableStringify = (obj) => {
+    function sortObject(o) {
+        if (o === null || typeof o !== 'object') {
+            return o;
+        }
+        if (Array.isArray(o)) {
+            return o.map(sortObject).sort((a, b) => {
+                const strA = JSON.stringify(a);
+                const strB = JSON.stringify(b);
+                return strA.localeCompare(strB);
+            });
+        }
+        const sortedObj = {};
+        const keys = Object.keys(o).sort();
+        for (const key of keys) {
+            sortedObj[key] = sortObject(o[key]);
+        }
+        return sortedObj;
+    }
+    return JSON.stringify(sortObject(obj));
 };
 
 function App() {
@@ -194,9 +216,71 @@ function App() {
     const [highlightedPaths, setHighlightedPaths] = useState([]);
     const [animatedValues, setAnimatedValues] = useState({});
     const [activeFilters, setActiveFilters] = useState({ event_type: [], event_action: [], status: [] });
+    const [selectedGridChats, setSelectedGridChats] = useState([]);
+    const [gridVersion, setGridVersion] = useState(0);
+    const [isValidating, setIsValidating] = useState(false);
+    const [updatedChats, setUpdatedChats] = useState({}); // { [chatId]: 'green' | 'red' }
+
+    const handleGridItemSelect = (chatId) => {
+        setSelectedGridChats(prevSelected => {
+            if (prevSelected.includes(chatId)) {
+                return prevSelected.filter(id => id !== chatId);
+            } else {
+                return [...prevSelected, chatId];
+            }
+        });
+        setUpdatedChats(prev => {
+            const newUpdated = { ...prev };
+            delete newUpdated[chatId];
+            return newUpdated;
+        });
+        setGridVersion(prevVersion => prevVersion + 1);
+    };
+
+    const [filteredGridChats, setFilteredGridChats] = useState([]);
+
+    useEffect(() => {
+        const filtered = chats.filter(chat => {
+            const serverChat = serverChats.find(s => s.id === chat.id);
+            const isModified = serverChat && stableStringify(chat.filledSchema) !== stableStringify(serverChat.filledSchema);
+
+            const typeMatch = activeFilters.event_type.length === 0 || activeFilters.event_type.includes(chat.filledSchema?.event_type);
+            const actionMatch = activeFilters.event_action.length === 0 || activeFilters.event_action.includes(chat.filledSchema?.event_action);
+            const statusMatch = activeFilters.status.length === 0 || activeFilters.status.some(status => {
+                if (status === 'Implemented') return chat.implemented;
+                if (status === 'Modified') {
+                    return isModified;
+                }
+                if (status === 'Unchanged') {
+                    return !chat.implemented && !isModified;
+                }
+                return false;
+            });
+
+            return typeMatch && actionMatch && statusMatch;
+        });
+        setFilteredGridChats(filtered);
+    }, [chats, activeFilters, serverChats]);
+
+    const handleGridSelectAll = () => {
+        const filteredChatIds = filteredGridChats.map(c => c.id);
+        const allFilteredSelected = filteredChatIds.length > 0 && filteredChatIds.every(id => selectedGridChats.includes(id));
+
+        if (allFilteredSelected) {
+            // Deselect all filtered chats
+            setSelectedGridChats(prevSelected => prevSelected.filter(id => !filteredChatIds.includes(id)));
+        } else {
+            // Select all filtered chats, keeping existing selections from other filters
+            setSelectedGridChats(prevSelected => [...new Set([...prevSelected, ...filteredChatIds])]);
+        }
+        setGridVersion(prevVersion => prevVersion + 1);
+    };
 
     const allEventTypes = [...new Set(chats.map(chat => chat.filledSchema?.event_type).filter(Boolean))];
     const allEventActions = [...new Set(chats.map(chat => chat.filledSchema?.event_action).filter(Boolean))];
+
+    const gridItemRefs = useRef({});
+
 
     const schemaDisplayRef = useRef(null);
     const prevFilledSchema = useRef(null);
@@ -219,6 +303,21 @@ function App() {
 
     // Load chats from local storage on initial render
     useEffect(() => {
+        const fetchServerChats = async () => {
+            try {
+                const serverResponse = await fetch('/api/schemas');
+                if (!serverResponse.ok) {
+                    throw new Error(`Failed to fetch schemas from server: ${serverResponse.statusText}`);
+                }
+                const serverSchemas = await serverResponse.json();
+                setServerChats(serverSchemas);
+            } catch (error) {
+                console.error('Error fetching server schemas:', error);
+            }
+        };
+
+        fetchServerChats();
+
         const checkServerRestore = async () => {
             try {
                 const response = await fetch('/api/last-restore');
@@ -426,14 +525,12 @@ function App() {
     const handleSelectChat = (chat) => {
         setCurrentChat(chat);
         const selectedSchemaString = chat.filledSchema ? JSON.stringify(chat.filledSchema, null, 2) : '';
-        // No animation on select, just show the final state
-        setDisplayedLines(selectedSchemaString.split('\n').map(text => ({ text, highlight: false })));
-        prevFilledSchema.current = selectedSchemaString;
-
-        setChats(prevChats => prevChats.map(c =>
-            c.id === chat.id ? { ...c, isNew: false } : c
-        ));
-    };
+        // No animation on select, just show the final state        
+        setDisplayedLines(selectedSchemaString.split('\n').map(text => ({ text, highlight: false }))); 
+        prevFilledSchema.current = selectedSchemaString; 
+        setChats(prevChats => prevChats.map(c => c.id === chat.id ? { ...c, isNew: false } : c));
+    }; 
+    const handleSelectChatAndExitVisualize = (chat) => { handleSelectChat(chat); if (visualizeMode) { setVisualizeMode(false); } };
 
     const handleDeleteChat = (idToDelete) => {
         setChats(prevChats => {
@@ -480,11 +577,11 @@ function App() {
             // Manually update the serverChats state to reflect the sync
             setServerChats(prevServerChats => {
                 const existingServerChatIndex = prevServerChats.findIndex(c => c.id === chatId);
-                const newServerChat = { 
-                    id: chatToSync.id, 
-                    name: chatToSync.name, 
-                    filledSchema: chatToSync.filledSchema, 
-                    implemented: chatToSync.implemented 
+                const newServerChat = {
+                    id: chatToSync.id,
+                    name: chatToSync.name,
+                    filledSchema: chatToSync.filledSchema,
+                    implemented: chatToSync.implemented
                 };
                 if (existingServerChatIndex > -1) {
                     const updatedServerChats = [...prevServerChats];
@@ -688,13 +785,16 @@ function App() {
             return;
         }
 
-        setLoading(true);
+        const schemasToValidate = chats.filter(chat => selectedGridChats.includes(chat.id) && !chat.implemented);
+
+        if (schemasToValidate.length === 0) {
+            setNotification({ message: "No selected, unimplemented schemas to validate.", type: 'info' });
+            return;
+        }
+
+        setIsValidating(true);
         try {
-            let filesToProcess = [];
-            let baseDirPath = directoryHandle.name;
-
-            filesToProcess = await readAllFilesFromDirectoryHandle(directoryHandle, '', useCli);
-
+            let filesToProcess = await readAllFilesFromDirectoryHandle(directoryHandle, '', useCli);
             const trimmedFiles = filesToProcess.map(file => {
                 if (file.content) {
                     return { ...file, content: String(file.content).trim() };
@@ -702,44 +802,40 @@ function App() {
                 return file;
             });
 
-            const response = await fetch('/api/generate-report', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    files: trimmedFiles,
-                    baseDirPath: baseDirPath,
-                    useClaude: useClaude,
-                    useCli: useCli
-                }),
-            });
+            for (const schema of schemasToValidate) {
+                const response = await fetch('/api/validate-implementation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        schema: schema.filledSchema,
+                        files: trimmedFiles,
+                        useClaude: useClaude,
+                        useCli: useCli
+                    }),
+                });
 
-            if (!response.ok) {
-                throw new Error(`Failed to generate report: ${response.statusText}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to validate schema: ${schema.name}`);
+                }
+
+                const result = await response.json();
+                
+                setSelectedGridChats(prev => prev.filter(id => id !== schema.id));
+
+                if (result.implemented) {
+                    setChats(prevChats => prevChats.map(chat => chat.id === schema.id ? { ...chat, implemented: true } : chat));
+                    setUpdatedChats(prev => ({ ...prev, [schema.id]: 'green' }));
+                } else {
+                    setUpdatedChats(prev => ({ ...prev, [schema.id]: 'red' }));
+                }
             }
 
-            const data = await response.json();
-
-            if (data.modifiedFiles && data.modifiedFiles.length > 0) {
-                setPendingChanges(data.modifiedFiles);
-                setActiveDiffTab(data.modifiedFiles[0].filePath);
-                setShowDiffPanel(true);
-                setNotification({ message: 'Report generated. Review changes and click "Approve Changes" to apply.', type: 'success' });
-            } else {
-                let notificationMessage = data.message || 'Report generated successfully!';
-                if (data.stdout) {
-                    notificationMessage += `\nOutput: ${data.stdout}`;
-                }
-                if (data.stderr) {
-                    notificationMessage += `\nError: ${data.stderr}`;
-                }
-                setNotification({ message: notificationMessage, type: 'success' });
-            }
-
+            setNotification({ message: 'Validation complete.', type: 'success' });
         } catch (error) {
             console.error('Error generating report:', error);
             setNotification({ message: `Failed to generate report: ${error.message}`, type: 'error' });
         } finally {
-            setLoading(false);
+            setIsValidating(false);
         }
     };
 
@@ -1264,7 +1360,7 @@ function App() {
         }
     };
 
-    const FilterControls = ({ types, actions, activeFilters, setActiveFilters }) => {
+    const FilterControls = ({ types, actions, activeFilters, setActiveFilters, onSelectAll, numSelected, numTotal }) => {
         const handleFilterChange = (filterType, value) => {
             setActiveFilters(prev => {
                 const currentFilters = prev[filterType];
@@ -1278,12 +1374,21 @@ function App() {
 
         return (
             <div className="p-4 bg-gray-900 border-b border-gray-800">
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-sm font-semibold text-gray-300">Filters</h3>
+                    <button
+                        className="inline-flex items-center text-xs font-medium text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700"
+                        onClick={onSelectAll}
+                    >
+                        {numSelected >= numTotal && numTotal > 0 ? 'Deselect All' : 'Select All'}
+                    </button>
+                </div>
                 <div className="mb-2">
                     <h3 className="text-sm font-semibold text-gray-300 mb-1">Event Type</h3>
                     <div className="flex flex-wrap gap-2">
                         {types.map(type => (
-                            <button 
-                                key={type} 
+                            <button
+                                key={type}
                                 onClick={() => handleFilterChange('event_type', type)}
                                 className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${activeFilters.event_type.includes(type) ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
                                 {type}
@@ -1295,8 +1400,8 @@ function App() {
                     <h3 className="text-sm font-semibold text-gray-300 mb-1">Event Action</h3>
                     <div className="flex flex-wrap gap-2">
                         {actions.map(action => (
-                            <button 
-                                key={action} 
+                            <button
+                                key={action}
                                 onClick={() => handleFilterChange('event_action', action)}
                                 className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${activeFilters.event_action.includes(action) ? 'bg-teal-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
                                 {action}
@@ -1316,8 +1421,8 @@ function App() {
                                 else if (status === 'Unchanged') colorClass = 'bg-white text-black';
                             }
                             return (
-                                <button 
-                                    key={status} 
+                                <button
+                                    key={status}
                                     onClick={() => handleFilterChange('status', status)}
                                     className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${colorClass}`}>
                                     {status}
@@ -1326,6 +1431,109 @@ function App() {
                         })}
                     </div>
                 </div>
+            </div>
+        );
+    };
+
+    const EventGrid = ({ chats, onSelectChat, serverChats, onOverride, onUnimplement, onSync, onDelete, activeFilters, selectedChats, onSelect }) => {
+        return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4 content-start">
+                {chats.map(chat => {
+                    const serverChat = serverChats.find(s => s.id === chat.id);
+                    const isSynced = serverChat && stableStringify(chat.filledSchema) === stableStringify(serverChat.filledSchema);
+                    const isSelected = selectedChats.includes(chat.id);
+                    const updateStatus = updatedChats[chat.id];
+
+                    let bgColor = 'bg-blue-950'; // Darker base blue
+                    let hoverBgColor = 'hover:bg-blue-900';
+                    let iconHoverBgColor = 'hover:bg-blue-750';
+
+                    if (chat.implemented) {
+                        bgColor = 'bg-green-950';
+                        hoverBgColor = 'hover:bg-green-900'; // Darker hover green
+                        iconHoverBgColor = 'hover:bg-green-800';
+                    } else if (isSynced) {
+                        bgColor = 'bg-gray-800';
+                        hoverBgColor = 'hover:bg-gray-700';
+                        iconHoverBgColor = 'hover:bg-gray-600';
+                    }
+
+                    if (isSelected) {
+                        if (chat.implemented) {
+                            bgColor = 'bg-green-700'; // Lighter selected green
+                        } else if (isSynced) {
+                            bgColor = 'bg-gray-600'; // Lighter selected gray
+                        } else {
+                            bgColor = 'bg-blue-700'; // Lighter selected blue
+                        }
+                    }
+
+                    return (
+                        <div key={chat.id} 
+                             ref={el => gridItemRefs.current[chat.id] = el}
+                             onClick={() => onSelect(chat.id)}
+                             className={`relative p-4 rounded-lg cursor-pointer ${!isSelected && hoverBgColor} transition-colors duration-200 ${bgColor} h-36 flex flex-col justify-between max-w-lg`}>
+                            {updateStatus && !isSelected && (
+                                <div className={`absolute top-2 right-2 w-2 h-2 ${updateStatus === 'green' ? 'bg-green-500' : 'bg-red-500'} rounded-full`}></div>
+                            )}
+                            <div className="overflow-hidden">
+                                <h3 className="text-md font-bold text-white truncate">{chat.name}</h3>
+                                <p className="text-sm text-gray-400 mt-1 truncate">{chat.filledSchema?.event_description || 'No description'}</p>
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                    {chat.filledSchema?.event_type && <span className="px-2 py-1 text-xs rounded-full bg-purple-600 text-white">{chat.filledSchema.event_type}</span>}
+                                    {chat.filledSchema?.event_action && <span className="px-2 py-1 text-xs rounded-full bg-teal-600 text-white">{chat.filledSchema.event_action}</span>}
+                                </div>
+                            </div>
+                            <div className="flex justify-end items-center mt-2">
+                                <div className="flex space-x-1">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onSelectChat(chat);
+                                        }}
+                                        title="View Details"
+                                        className={`p-1 rounded-full ${iconHoverBgColor} transition-colors duration-200`}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (chat.implemented) {
+                                                onUnimplement(chat.id);
+                                            } else {
+                                                onOverride(chat.id);
+                                            }
+                                        }}
+                                        title={chat.implemented ? "Mark as Not Implemented" : "Override Implementation"}
+                                        className={`p-1 rounded-full ${iconHoverBgColor} transition-colors duration-200 group`}>
+                                        {chat.implemented ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white group-hover:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white group-hover:text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); onSync(chat.id) }} title="Sync to Server" className={`p-1 rounded-full ${iconHoverBgColor} transition-colors duration-200`}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+                                        </svg>
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); onDelete(chat.id) }} title="Delete Locally" className={`p-1 rounded-full ${iconHoverBgColor} transition-colors duration-200`}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm-1 3a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         );
     };
@@ -1389,100 +1597,11 @@ function App() {
         );
     };
 
-    const EventGrid = ({ chats, onSelectChat, serverChats, onOverride, onUnimplement, onSync, onDelete, activeFilters }) => {
-        const filteredChats = chats.filter(chat => {
-            const typeMatch = activeFilters.event_type.length === 0 || activeFilters.event_type.includes(chat.filledSchema?.event_type);
-            const actionMatch = activeFilters.event_action.length === 0 || activeFilters.event_action.includes(chat.filledSchema?.event_action);
-            const statusMatch = activeFilters.status.length === 0 || activeFilters.status.some(status => {
-                if (status === 'Implemented') return chat.implemented;
-                if (status === 'Modified') {
-                    const serverChat = serverChats.find(s => s.id === chat.id);
-                    return serverChat && JSON.stringify(chat.filledSchema) !== JSON.stringify(serverChat.filledSchema);
-                }
-                if (status === 'Unchanged') {
-                    const serverChat = serverChats.find(s => s.id === chat.id);
-                    return !chat.implemented && (!serverChat || JSON.stringify(chat.filledSchema) === JSON.stringify(serverChat.filledSchema));
-                }
-                return false;
-            });
-
-            return typeMatch && actionMatch && statusMatch;
-        });
-
-        return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4 content-start">
-                {filteredChats.map(chat => {
-                    const serverChat = serverChats.find(s => s.id === chat.id);
-                    const isSynced = serverChat && JSON.stringify(chat.filledSchema) === JSON.stringify(serverChat.filledSchema);
-
-                    let bgColor = 'bg-blue-900';
-                    let hoverBgColor = 'hover:bg-blue-800';
-                    let iconHoverBgColor = 'hover:bg-blue-700';
-
-                    if (chat.implemented) {
-                        bgColor = 'bg-green-950';
-                        hoverBgColor = 'hover:bg-green-800';
-                        iconHoverBgColor = 'hover:bg-green-700';
-                    } else if (isSynced) {
-                        bgColor = 'bg-gray-800';
-                        hoverBgColor = 'hover:bg-gray-700';
-                        iconHoverBgColor = 'hover:bg-gray-600';
-                    }
-
-                    return (
-                        <div key={chat.id} 
-                             className={`p-4 rounded-lg cursor-pointer ${hoverBgColor} transition-colors duration-200 ${bgColor} h-36 flex flex-col justify-between max-w-lg`}>
-                            <div onClick={() => onSelectChat(chat)} className="overflow-hidden">
-                                <h3 className="text-md font-bold text-white truncate">{chat.name}</h3>
-                                <p className="text-sm text-gray-400 mt-1 truncate">{chat.filledSchema?.event_description || 'No description'}</p>
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                    {chat.filledSchema?.event_type && <span className="px-2 py-1 text-xs rounded-full bg-purple-600 text-white">{chat.filledSchema.event_type}</span>}
-                                    {chat.filledSchema?.event_action && <span className="px-2 py-1 text-xs rounded-full bg-teal-600 text-white">{chat.filledSchema.event_action}</span>}
-                                </div>
-                            </div>
-                            <div className="flex justify-end mt-2 space-x-1">
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation(); 
-                                        if (chat.implemented) {
-                                            onUnimplement(chat.id);
-                                        } else {
-                                            onOverride(chat.id);
-                                        }
-                                    }} 
-                                    title={chat.implemented ? "Mark as Not Implemented" : "Override Implementation"} 
-                                    className={`p-1 rounded-full ${iconHoverBgColor} transition-colors duration-200 group`}>
-                                    {chat.implemented ? (
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white group-hover:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    ) : (
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white group-hover:text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                        </svg>
-                                    )}
-                                </button>
-                                <button onClick={(e) => {e.stopPropagation(); onSync(chat.id)}} title="Sync to Server" className={`p-1 rounded-full ${iconHoverBgColor} transition-colors duration-200`}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
-                                    </svg>
-                                </button>
-                                <button onClick={(e) => {e.stopPropagation(); onDelete(chat.id)}} title="Delete Locally" className={`p-1 rounded-full ${iconHoverBgColor} transition-colors duration-200`}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm-1 3a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" clipRule="evenodd" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        );
-    };
-
     // const filteredChats = chats.filter(chat =>
     //     chat.name.toLowerCase().includes(searchTerm.toLowerCase())
     // );
+
+    const numSelectedInFiltered = filteredGridChats.filter(c => selectedGridChats.includes(c.id)).length;
 
     return (
         <div className="dark bg-gray-950 text-gray-200 h-screen flex font-sans text-sm">
@@ -1493,7 +1612,10 @@ function App() {
             />
             <aside className="w-64 bg-gray-900 p-3 flex flex-col border-r border-gray-800">
                 <div className="flex-shrink-0">
-                    <h1 className="text-lg font-semibold mb-4 text-gray-100">Event Schemas</h1>
+                    <div className="flex justify-between items-center mb-4">
+                        <h1 className="text-lg font-semibold text-gray-100">Event Schemas</h1>
+
+                    </div>
                     <div className="flex mb-2">
                         <button
                             className="flex-grow bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2 px-3 rounded-l-md transition-colors duration-200 flex items-center justify-center"
@@ -1612,7 +1734,8 @@ function App() {
                                 setIsRightClickMenu(true);
                             }}
                         >
-                            <span onClick={() => handleSelectChat(chat)} className="flex-grow text-sm truncate">
+
+                            <span onClick={() => handleSelectChatAndExitVisualize(chat)} className="flex-grow text-sm truncate">
                                 {chat.name}
                             </span>
                             <div className="relative flex items-center">
@@ -1676,39 +1799,47 @@ function App() {
                 <div className="mt-auto pt-3 border-t border-gray-800 -mx-3">
                     <div className="space-y-2 px-3">
                         <button
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
-                        onClick={handleGenerateReport}
-                        title="Generate Report"
-                    >
-                        Generate Report
-                    </button>
-                    <button
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center mt-2"
-                        onClick={() => setVisualizeMode(!visualizeMode)}
-                        title="Visualize Events"
-                    >
-                        {visualizeMode ? 'Exit Visualization' : 'Visualize'}
-                    </button>
-                    <button
-                        className="w-full bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
-                        onClick={handleDownloadAllSchemas}
-                        title="Download All Local Schemas"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
-                        </svg>
-                        Download Schemas
-                    </button>
-                    <button
-                        className="w-full bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
-                        onClick={handleBackupServer}
-                        title="Backup Server Data"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4z" />
-                        </svg>
-                        Backup Server
-                    </button>
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
+                            onClick={handleGenerateReport}
+                            disabled={isValidating}
+                            title="Generate Report"
+                        >
+                            {isValidating ? (
+                                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            ) : (
+                                'Generate Report'
+                            )}
+                        </button>
+                        <button
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center mt-2"
+                            onClick={() => setVisualizeMode(!visualizeMode)}
+                            title="Visualize Events"
+                        >
+                            {visualizeMode ? 'Exit Visualization' : 'Visualize'}
+                        </button>
+                        <button
+                            className="w-full bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
+                            onClick={handleDownloadAllSchemas}
+                            title="Download All Local Schemas"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                            </svg>
+                            Download Schemas
+                        </button>
+                        <button
+                            className="w-full bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
+                            onClick={handleBackupServer}
+                            title="Backup Server Data"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4z" />
+                            </svg>
+                            Backup Server
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -1718,9 +1849,9 @@ function App() {
                 )}
                 {visualizeMode ? (
                     <div className="flex flex-col w-full h-full">
-                        <FilterControls types={allEventTypes} actions={allEventActions} activeFilters={activeFilters} setActiveFilters={setActiveFilters} />
+                        <FilterControls types={allEventTypes} actions={allEventActions} activeFilters={activeFilters} setActiveFilters={setActiveFilters} onSelectAll={handleGridSelectAll} numSelected={numSelectedInFiltered} numTotal={filteredGridChats.length} />
                         <div className="flex-grow overflow-y-auto">
-                            <EventGrid chats={chats} onSelectChat={handleSelectChatFromGrid} serverChats={serverChats} onOverride={handleOverrideImplementation} onUnimplement={handleUnimplement} onSync={handleSyncChatToServer} onDelete={handleDeleteChat} activeFilters={activeFilters} />
+                            <EventGrid key={gridVersion} chats={filteredGridChats} onSelectChat={handleSelectChatFromGrid} serverChats={serverChats} onOverride={handleOverrideImplementation} onUnimplement={handleUnimplement} onSync={handleSyncChatToServer} onDelete={handleDeleteChat} activeFilters={activeFilters} selectedChats={selectedGridChats} onSelect={handleGridItemSelect} />
                         </div>
                     </div>
                 ) : (
@@ -1876,7 +2007,7 @@ function App() {
                                                 title="Toggle Code Agent"
                                                 onClick={() => setUseCodeAgent(!useCodeAgent)}
                                             >
-                                                <span className={`text-2xl ${useCodeAgent ? 'text-blue-500' : ''}`} style={{position: 'relative', top: '-1px'}}>✦</span>
+                                                <span className={`text-2xl ${useCodeAgent ? 'text-blue-500' : ''}`} style={{ position: 'relative', top: '-1px' }}>✦</span>
                                             </button>
                                             <button
                                                 className="absolute right-12 bottom-2 bg-gray-900 hover:bg-gray-700 text-gray-100 font-medium p-2 rounded-full transition-colors duration-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
