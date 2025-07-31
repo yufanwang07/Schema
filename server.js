@@ -413,50 +413,58 @@ app.post('/api/code-agent', async (req, res) => {
         });
 
         child.on('close', async code => {
-            console.log(`${cliName} exited with code ${code}`);
+            try {
+                console.log(`${cliName} exited with code ${code}`);
 
-            if (code !== 0) {
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        message: `${cliName} process exited with an error`,
-                        exitCode: code,
-                    });
+                if (code !== 0) {
+                    if (!res.headersSent) {
+                        res.status(500).json({
+                            message: `${cliName} process exited with an error`,
+                            exitCode: code,
+                        });
+                    }
+                    return;
                 }
-                res.end();
-                return;
-            }
 
-            const modifiedFiles = [];
-            const getAllFiles = async (dirPath, fileList = []) => {
-                const entries = await fs.readdir(dirPath, { withFileTypes: true });
-                for (const entry of entries) {
-                    const fullPath = path.join(dirPath, entry.name);
-                    if (entry.isDirectory()) {
-                        await getAllFiles(fullPath, fileList);
-                    } else {
-                        fileList.push(fullPath);
+                const modifiedFiles = [];
+                const getAllFiles = async (dirPath, fileList = []) => {
+                    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                    for (const entry of entries) {
+                        const fullPath = path.join(dirPath, entry.name);
+                        if (entry.isDirectory()) {
+                            await getAllFiles(fullPath, fileList);
+                        } else {
+                            fileList.push(fullPath);
+                        }
+                    }
+                    return fileList;
+                };
+
+                const allFilePaths = await getAllFiles(userFilesDir);
+
+                for (const filePath of allFilePaths) {
+                    const relativePath = path.relative(userFilesDir, filePath).replace(/\\/g, '/');
+                    const originalContent = originalFileContents.get(relativePath);
+                    const newContent = await fs.readFile(filePath, 'utf8');
+
+                    if (originalContent !== newContent) {
+                        modifiedFiles.push({
+                            filePath: relativePath,
+                            modifiedContent: newContent,
+                        });
                     }
                 }
-                return fileList;
-            };
 
-            const allFilePaths = await getAllFiles(userFilesDir);
-
-            for (const filePath of allFilePaths) {
-                const relativePath = path.relative(userFilesDir, filePath).replace(/\\/g, '/');
-                const originalContent = originalFileContents.get(relativePath);
-                const newContent = await fs.readFile(filePath, 'utf8');
-
-                if (originalContent !== newContent) {
-                    modifiedFiles.push({
-                        filePath: relativePath,
-                        modifiedContent: newContent,
-                    });
+                res.write(JSON.stringify({ modifiedFiles: modifiedFiles }) + '\n');
+            } finally {
+                try {
+                    await fs.rm(userFilesDir, { recursive: true, force: true });
+                    console.log('USER_FILES directory cleared for /api/code-agent');
+                } catch (err) {
+                    console.error('Error clearing USER_FILES directory for /api/code-agent:', err);
                 }
+                res.end();
             }
-
-            res.write(JSON.stringify({ modifiedFiles: modifiedFiles }) + '\n');
-            res.end();
         });
 
     } catch (error) {
@@ -489,7 +497,7 @@ app.post('/api/validate-implementation', async (req, res) => {
         }
 
         const metadataString = JSON.stringify(schema || {});
-        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for the logged event name as content in files, as well as likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. If event_metadata field is just {} assume no additional information is needed to be logged. ONLY CONSIDER THE EVENT_METADATA FIELD---THE OTHER FIELDS SUCHAS TYPE ACTION LABEL AND DESCRIPTION ARE ONLY FOR YOU TO UNDERSTAND. Logging should have a call to .event (commonly log.event) or .queueAppsFlyerEvent Schema: ${metadataString}.`;
+        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for the logged event name as content in THE FILE CONTENT OF EVERY FILE *RECURSIVELY* (not filenames!), as well as likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. If event_metadata field is just {} assume no additional information is needed to be logged. ONLY CONSIDER THE EVENT_METADATA FIELD---THE OTHER FIELDS SUCHAS TYPE ACTION LABEL AND DESCRIPTION ARE ONLY FOR YOU TO UNDERSTAND. Logging should have a call to .event (commonly log.event) or .queueAppsFlyerEvent Schema: ${metadataString}.`;
 
         let cliCommand, cliName, cliArgs;
         if (useClaude) {
@@ -527,6 +535,13 @@ app.post('/api/validate-implementation', async (req, res) => {
             if (code !== 0) {
                 console.error(`[${cliName} stderr]:`, stderrData);
                 return res.status(500).json({ error: `${cliName} process exited with an error.`, details: stderrData });
+            }
+            
+            try {
+                await fs.rm(userFilesDir, { recursive: true, force: true });
+                console.log('USER_FILES directory cleared for /api/validate-implementation');
+            } catch (err) {
+                console.error('Error clearing USER_FILES directory for /api/validate-implementation:', err);
             }
 
             try {
@@ -626,50 +641,58 @@ app.post('/api/generate-report', async (req, res) => {
         });
 
         child.on('close', async (code) => { // Added async here
-            console.log(`CLI process exited with code ${code}`);
+            try {
+                console.log(`CLI process exited with code ${code}`);
 
-            if (code !== 0) {
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        message: `${cliName} process exited with an error`,
-                        exitCode: code,
-                    });
+                if (code !== 0) {
+                    if (!res.headersSent) {
+                        res.status(500).json({
+                            message: `${cliName} process exited with an error`,
+                            exitCode: code,
+                        });
+                    }
+                    return;
                 }
-                res.end();
-                return;
-            }
 
-            const modifiedFiles = [];
-            const getAllFiles = async (dirPath, fileList = []) => {
-                const entries = await fs.readdir(dirPath, { withFileTypes: true });
-                for (const entry of entries) {
-                    const fullPath = path.join(dirPath, entry.name);
-                    if (entry.isDirectory()) {
-                        await getAllFiles(fullPath, fileList);
-                    } else {
-                        fileList.push(fullPath);
+                const modifiedFiles = [];
+                const getAllFiles = async (dirPath, fileList = []) => {
+                    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                    for (const entry of entries) {
+                        const fullPath = path.join(dirPath, entry.name);
+                        if (entry.isDirectory()) {
+                            await getAllFiles(fullPath, fileList);
+                        } else {
+                            fileList.push(fullPath);
+                        }
+                    }
+                    return fileList;
+                };
+
+                const allFilePaths = await getAllFiles(userFilesDir);
+
+                for (const filePath of allFilePaths) {
+                    const relativePath = path.relative(userFilesDir, filePath).replace(/\\/g, '/');
+                    const originalContent = originalFileContents.get(relativePath);
+                    const newContent = await fs.readFile(filePath, 'utf8');
+
+                    if (originalContent !== newContent) {
+                        modifiedFiles.push({
+                            filePath: relativePath,
+                            modifiedContent: newContent,
+                        });
                     }
                 }
-                return fileList;
-            };
 
-            const allFilePaths = await getAllFiles(userFilesDir);
-
-            for (const filePath of allFilePaths) {
-                const relativePath = path.relative(userFilesDir, filePath).replace(/\\/g, '/');
-                const originalContent = originalFileContents.get(relativePath);
-                const newContent = await fs.readFile(filePath, 'utf8');
-
-                if (originalContent !== newContent) {
-                    modifiedFiles.push({
-                        filePath: relativePath,
-                        modifiedContent: newContent,
-                    });
+                res.write(JSON.stringify({ modifiedFiles: modifiedFiles }) + '\n');
+            } finally {
+                try {
+                    await fs.rm(userFilesDir, { recursive: true, force: true });
+                    console.log('USER_FILES directory cleared for /api/generate-report');
+                } catch (err) {
+                    console.error('Error clearing USER_FILES directory for /api/generate-report:', err);
                 }
+                res.end();
             }
-
-            res.write(JSON.stringify({ modifiedFiles: modifiedFiles }) + '\n');
-            res.end();
         });
 
         child.on('error', (err) => {
@@ -772,6 +795,13 @@ try {
     } catch (error) {
         console.error('Error injecting logging:', error);
         res.status(500).json({ error: `Failed to inject logging: ${error.message}` });
+    } finally {
+        try {
+            await fs.rm(userFilesDir, { recursive: true, force: true });
+            console.log('USER_FILES directory cleared for /api/inject-logging');
+        } catch (err) {
+            console.error('Error clearing USER_FILES directory for /api/inject-logging:', err);
+        }
     }
 });
 
@@ -860,6 +890,13 @@ app.post('/api/inject-novo', async (req, res) => {
     } catch (error) {
         console.error('Error in inject-novo endpoint:', error);
         res.status(500).json({ error: `Failed to process Novo logging: ${error.message}` });
+    } finally {
+        try {
+            await fs.rm(userFilesDir, { recursive: true, force: true });
+            console.log('USER_FILES directory cleared for /api/inject-novo');
+        } catch (err) {
+            console.error('Error clearing USER_FILES directory for /api/inject-novo:', err);
+        }
     }
 });
 
@@ -998,57 +1035,66 @@ app.post('/api/cli-inject', async (req, res) => {
         });
 
         child.on('close', async code => {
-            console.log(`Gemini exited with code ${code}`);
+            try {
+                console.log(`Gemini exited with code ${code}`);
 
-            if (code !== 0) {
-                return res.status(500).json({
-                    message: 'Gemini process exited with an error',
-                    exitCode: code,
-                    stdout: stdoutData,
-                    stderr: stderrData,
-                });
-            }
-
-            // Diff logic starts here
-            const modifiedFiles = [];
-            const getAllFiles = async (dirPath, fileList = []) => {
-                const entries = await fs.readdir(dirPath, { withFileTypes: true });
-                for (const entry of entries) {
-                    const fullPath = path.join(dirPath, entry.name);
-                    if (entry.isDirectory()) {
-                        await getAllFiles(fullPath, fileList);
-                    } else {
-                        fileList.push(fullPath);
-                    }
-                }
-                return fileList;
-            };
-
-            const allFilePaths = await getAllFiles(userFilesDir);
-
-            for (const filePath of allFilePaths) {
-                const relativePath = path.relative(userFilesDir, filePath).replace(/\\/g, '/');
-                if (path.basename(relativePath) === 'GEMINI.md') {
-                    continue; // Skip GEMINI.md                
-                }
-
-                const originalContent = originalFileContents.get(relativePath);
-                const newContent = await fs.readFile(filePath, 'utf8');
-
-                if (originalContent !== newContent) {
-                    modifiedFiles.push({
-                        filePath: relativePath,
-                        modifiedContent: newContent,
+                if (code !== 0) {
+                    return res.status(500).json({
+                        message: 'Gemini process exited with an error',
+                        exitCode: code,
+                        stdout: stdoutData,
+                        stderr: stderrData,
                     });
                 }
-            }
 
-            return res.status(200).json({
-                message: 'Gemini process finished successfully',
-                stdout: stdoutData,
-                stderr: stderrData,
-                modifiedFiles: modifiedFiles,
-            });
+                // Diff logic starts here
+                const modifiedFiles = [];
+                const getAllFiles = async (dirPath, fileList = []) => {
+                    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                    for (const entry of entries) {
+                        const fullPath = path.join(dirPath, entry.name);
+                        if (entry.isDirectory()) {
+                            await getAllFiles(fullPath, fileList);
+                        } else {
+                            fileList.push(fullPath);
+                        }
+                    }
+                    return fileList;
+                };
+
+                const allFilePaths = await getAllFiles(userFilesDir);
+
+                for (const filePath of allFilePaths) {
+                    const relativePath = path.relative(userFilesDir, filePath).replace(/\\/g, '/');
+                    if (path.basename(relativePath) === 'GEMINI.md') {
+                        continue; // Skip GEMINI.md                
+                    }
+
+                    const originalContent = originalFileContents.get(relativePath);
+                    const newContent = await fs.readFile(filePath, 'utf8');
+
+                    if (originalContent !== newContent) {
+                        modifiedFiles.push({
+                            filePath: relativePath,
+                            modifiedContent: newContent,
+                        });
+                    }
+                }
+
+                return res.status(200).json({
+                    message: 'Gemini process finished successfully',
+                    stdout: stdoutData,
+                    stderr: stderrData,
+                    modifiedFiles: modifiedFiles,
+                });
+            } finally {
+                try {
+                    await fs.rm(userFilesDir, { recursive: true, force: true });
+                    console.log('USER_FILES directory cleared for /api/cli-inject');
+                } catch (err) {
+                    console.error('Error clearing USER_FILES directory for /api/cli-inject:', err);
+                }
+            }
         });
 
     } catch (error) {
