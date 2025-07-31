@@ -12,7 +12,8 @@
         "option": "SIGN_UP|SIGN_IN"
       }
     },
-    "implemented": false
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753807992542.5632,
@@ -25,7 +26,8 @@
       "event_description": "Event logged when a user successfully signs up.",
       "event_metadata": {}
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753807998568.2832,
@@ -40,7 +42,8 @@
         "error_message": ""
       }
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808003951.339,
@@ -53,7 +56,8 @@
       "event_description": "Event logged when a user taps the 'Switch to Sign-in' button on the signup page.",
       "event_metadata": {}
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808010215.4773,
@@ -66,7 +70,8 @@
       "event_description": "Event logged when user transitions from Safe Start to PH.",
       "event_metadata": {}
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808016740.9443,
@@ -79,7 +84,8 @@
       "event_description": "Event recorded when the user taps the button to launch Q2B.",
       "event_metadata": {}
     },
-    "implemented": false
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808022376.768,
@@ -99,7 +105,8 @@
         "estimated_annual_mileage": 8000
       }
     },
-    "implemented": false
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808030195.2104,
@@ -115,7 +122,8 @@
         "message": "Quote automatically rejected due to system error"
       }
     },
-    "implemented": false
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808035697.949,
@@ -135,7 +143,8 @@
         "estimated_annual_mileage": 8000
       }
     },
-    "implemented": false
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808041942.824,
@@ -148,7 +157,8 @@
       "event_description": "Event logged when the user adds their Date of Birth.",
       "event_metadata": {}
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808047480.4426,
@@ -163,7 +173,8 @@
         "vehicle_detail": "MAKE|MODEL|YEAR"
       }
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808052873.8145,
@@ -178,7 +189,8 @@
         "Equipped": true
       }
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808058443.8083,
@@ -191,7 +203,8 @@
       "event_description": "Event logged when the user confirms their vehicle information.",
       "event_metadata": {}
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808063837.2366,
@@ -206,7 +219,8 @@
         "vehicle_details": "MAKE|MODEL|YEAR"
       }
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808071649.647,
@@ -221,7 +235,8 @@
         "name_detail": "FIRST_NAME|LAST_NAME"
       }
     },
-    "implemented": true
+    "implemented": false,
+    "report": null
   },
   {
     "id": 1753808077108.7122,
@@ -233,7 +248,8 @@
       "event_label": "Edit_DoB",
       "event_description": "Event logged when the user taps to edit their Date of Birth.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808082597.7644,
@@ -247,7 +263,8 @@
       "event_metadata": {
         "name_detail": "FIRST_NAME|LAST_NAME"
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808088130.0947,
@@ -261,7 +278,8 @@
       "event_metadata": {
         "address_detail": "ADDRESS|APT|ZIP_CODE"
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808094466.9968,
@@ -273,7 +291,8 @@
       "event_label": "QuoteStatus_Score_Not_Ready",
       "event_description": "Event logged when the user interacts with a UI element indicating the quote score is not ready.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808100216.5571,
@@ -287,7 +306,8 @@
       "event_metadata": {
         "error_message": "***"
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808105736.5356,
@@ -299,7 +319,8 @@
       "event_label": "Driver_Not_Eligible",
       "event_description": "Event logged when a driver is deemed ineligible.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808112694.1382,
@@ -311,7 +332,8 @@
       "event_label": "Discount_Simulator_Clicked",
       "event_description": "Event logged when the user clicks on the Discount Simulator button.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808121209.6782,
@@ -323,7 +345,8 @@
       "event_label": "Discount_Simulator_FTUE_Shown",
       "event_description": "Event logged when the Discount Simulator First-Time User Experience (FTUE) is shown to the user.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808127618.4905,
@@ -335,7 +358,8 @@
       "event_label": "Discount_Simulator_FTUE_Dismiss",
       "event_description": "Event logged when the user dismisses the Discount Simulator First Time User Experience (FTUE).",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808134605.393,
@@ -349,7 +373,8 @@
       "event_metadata": {
         "direction": "LEFT|RIGHT"
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808140841.4268,
@@ -363,7 +388,8 @@
       "event_metadata": {
         "index": 1
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808146566.2798,
@@ -377,7 +403,8 @@
       "event_metadata": {
         "index": 1
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808152327.8276,
@@ -391,7 +418,8 @@
       "event_metadata": {
         "index": 1
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808162341.6255,
@@ -405,7 +433,8 @@
       "event_metadata": {
         "index": 1
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808167935.4036,
@@ -419,7 +448,8 @@
       "event_metadata": {
         "index": 1
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808173557.87,
@@ -433,7 +463,8 @@
       "event_metadata": {
         "index": 1
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808183489.286,
@@ -445,7 +476,8 @@
       "event_label": "Where_Is_Quote_Clicked",
       "event_description": "Event logged when user clicks on 'Where is my quote?' button.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808188971.861,
@@ -457,7 +489,8 @@
       "event_label": "Quote_CompletePII_Clicked",
       "event_description": "Event logged when the user clicks the button to complete PII information for a quote.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808196188.6643,
@@ -469,7 +502,8 @@
       "event_label": "Quote_CompleteSetup_Clicked",
       "event_description": "Event logged when the user clicks the 'Complete Setup' button on the quote page.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808201714.1006,
@@ -481,7 +515,8 @@
       "event_label": "SafeStart_Consent_SyncSuccessful",
       "event_description": "Event logged when user successfully syncs their consent preferences with SafeStart.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808208933.3186,
@@ -493,7 +528,8 @@
       "event_label": "SafeStart_Consent_SyncFailure",
       "event_description": "Event recorded when SafeStart consent synchronization fails due to a user action.",
       "event_metadata": {}
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808214549.3918,
@@ -509,7 +545,8 @@
         "app_id": "com.novo.yyy",
         "forward_to_appsflyer": true
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808220278.2861,
@@ -525,7 +562,8 @@
         "app_id": "com.novo.yyy",
         "forward_to_appsflyer": true
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808227743.2576,
@@ -541,7 +579,8 @@
         "app_id": "com.novo.yyy",
         "forward_to_appsflyer": true
       }
-    }
+    },
+    "report": null
   },
   {
     "id": 1753808233508.2942,
@@ -557,6 +596,7 @@
         "app_id": "com.novo.yyy",
         "forward_to_appsflyer": true
       }
-    }
+    },
+    "report": null
   }
 ]

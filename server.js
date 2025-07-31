@@ -102,17 +102,18 @@ const loadLatestBackup = async () => {
 
 // Endpoint to save a schema
 app.post('/api/schemas', (req, res) => {
-    const { id, name, filledSchema, implemented } = req.body;
+    const { id, name, filledSchema, implemented, report } = req.body;
     if (!id || !name || !filledSchema) {
         return res.status(400).json({ error: 'id, name, and filledSchema are required' });
     }
     // Check if schema with same ID already exists and update it
     const existingIndex = storedSchemas.findIndex(s => s.id === id);
+    const schemaData = { id, name, filledSchema, implemented, report: report || null };
     if (existingIndex > -1) {
-        storedSchemas[existingIndex] = { id, name, filledSchema, implemented };
+        storedSchemas[existingIndex] = schemaData;
         console.log(`Updated schema with ID: ${id}`);
     } else {
-        storedSchemas.push({ id, name, filledSchema, implemented });
+        storedSchemas.push(schemaData);
         console.log(`Saved new schema with ID: ${id}`);
     }
     res.status(200).json({ message: 'Schema saved successfully' });
@@ -482,6 +483,30 @@ app.post('/api/validate-implementation', async (req, res) => {
         return res.status(400).json({ error: 'Schema and an array of files are required' });
     }
 
+    // Shortcut for schemas with no metadata
+    if (schema.event_metadata && Object.keys(schema.event_metadata).length === 0) {
+        const eventName = schema.event_name;
+        let searchString = `log.event("${eventName}")`;
+        let found = false;
+        for (const file of files) {
+            if (file.content && file.content.includes(searchString)) {
+                found = true;
+                break;
+            }
+        }
+        searchString = `AppsFlyerProviderHolder.queueAppsFlyerEvent("${eventName}")`;
+        for (const file of files) {
+            if (file.content && file.content.includes(searchString)) {
+                found = true;
+                break;
+            }
+        }
+        if (found) {
+            console.log(`Found log.event for "${eventName}" with empty metadata, skipping CLI process.`);
+            return res.status(200).json({ implemented: true });
+        }
+    }
+
     const userFilesDir = path.join(__dirname, 'USER_FILES');
 
     try {
@@ -497,7 +522,7 @@ app.post('/api/validate-implementation', async (req, res) => {
         }
 
         const metadataString = JSON.stringify(schema || {});
-        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for the logged event name as content in THE FILE CONTENT OF EVERY FILE *RECURSIVELY* (not filenames!), as well as likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. If event_metadata field is just {} assume no additional information is needed to be logged. ONLY CONSIDER THE EVENT_METADATA FIELD---THE OTHER FIELDS SUCHAS TYPE ACTION LABEL AND DESCRIPTION ARE ONLY FOR YOU TO UNDERSTAND. Logging should have a call to .event (commonly log.event) or .queueAppsFlyerEvent Schema: ${metadataString}.`;
+        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for the logged event name as content in THE FILE CONTENT OF EVERY FILE *RECURSIVELY* (not filenames!), as well as likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. If event_metadata field is just {} assume no additional information is needed to be logged. ONLY CONSIDER THE EVENT_METADATA FIELD---THE OTHER FIELDS SUCHAS TYPE ACTION LABEL AND DESCRIPTION ARE ONLY FOR YOU TO UNDERSTAND. Logging should have a call to .event (commonly log.event) or .queueAppsFlyerEvent Schema: ${metadataString}. Return the relevant code segment of the logging as well (maybe 5 lines maximum) if found or incorrectly implemented`;
 
         let cliCommand, cliName, cliArgs;
         if (useClaude) {
@@ -546,7 +571,7 @@ app.post('/api/validate-implementation', async (req, res) => {
 
             try {
                 console.log("parser triggered")
-                const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+                const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
                 const validationPrompt = `Based on the following response from a previous verification agent, determine if the schema is correctly implemented. The implementation is correct if the event_metadata is logged. An incorrect implementation is not an implementation. Return a JSON object with a single boolean field, "implemented".
 
 Response:
@@ -559,8 +584,15 @@ ${stdoutData}`;
                 const response = result.response;
                 const text = response.text();
                 const jsonResponse = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+
+                const reportPrompt = `Based on the following response from a previous verification agent, provide a concise (1-2 sentences) report on whether the implementation is correct and why, including the relevant code segment. Return a single string.\n\nResponse:\n${stdoutData}`;
+                const reportResult = await model.generateContent(reportPrompt);
+                const reportResponse = await reportResult.response;
+                const reportText = reportResponse.text();
                 
-                console.log("returning " + text)
+                jsonResponse.report = reportText;
+                
+                console.log("returning " + JSON.stringify(jsonResponse))
                 res.status(200).json(jsonResponse);
             } catch (error) {
                 console.error('Error validating implementation with Gemini API:', error);

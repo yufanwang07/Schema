@@ -242,7 +242,7 @@ function App() {
     useEffect(() => {
         const filtered = chats.filter(chat => {
             const serverChat = serverChats.find(s => s.id === chat.id);
-            const isModified = serverChat && stableStringify(chat.filledSchema) !== stableStringify(serverChat.filledSchema);
+            const isModified = serverChat && (stableStringify(chat.filledSchema) !== stableStringify(serverChat.filledSchema) || (chat.report || null) !== (serverChat.report || null));
 
             const typeMatch = activeFilters.event_type.length === 0 || activeFilters.event_type.includes(chat.filledSchema?.event_type);
             const actionMatch = activeFilters.event_action.length === 0 || activeFilters.event_action.includes(chat.filledSchema?.event_action);
@@ -648,7 +648,8 @@ function App() {
                         filledSchema: serverSchema.filledSchema,
                         schema: baseSchemaString, // Always provide the base schema
                         isNew: true,
-                        implemented: serverSchema.implemented
+                        implemented: serverSchema.implemented,
+                        report: serverSchema.report || null
                     };
 
                     if (existingChatIndex > -1) {
@@ -822,8 +823,13 @@ function App() {
                 
                 setSelectedGridChats(prev => prev.filter(id => id !== schema.id));
 
+                setChats(prevChats => prevChats.map(chat =>
+                    chat.id === schema.id
+                        ? { ...chat, implemented: result.implemented, report: result.report }
+                        : chat
+                ));
+
                 if (result.implemented) {
-                    setChats(prevChats => prevChats.map(chat => chat.id === schema.id ? { ...chat, implemented: true } : chat));
                     setUpdatedChats(prev => ({ ...prev, [schema.id]: 'green' }));
                 } else {
                     setUpdatedChats(prev => ({ ...prev, [schema.id]: 'red' }));
@@ -1344,30 +1350,12 @@ function App() {
         setIsModalOpen(true);
     };
 
-    const handleOverrideImplementation = async (chatId) => {
+    const handleOverrideImplementation = (chatId) => {
         setChats(prevChats => prevChats.map(chat => chat.id === chatId ? { ...chat, implemented: true } : chat));
-        try {
-            await fetch(`/api/schemas/${chatId}/implemented`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ implemented: true }),
-            });
-        } catch (error) {
-            console.error('Error syncing implementation status:', error);
-        }
     };
 
-    const handleUnimplement = async (chatId) => {
+    const handleUnimplement = (chatId) => {
         setChats(prevChats => prevChats.map(chat => chat.id === chatId ? { ...chat, implemented: false } : chat));
-        try {
-            await fetch(`/api/schemas/${chatId}/implemented`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ implemented: false }),
-            });
-        } catch (error) {
-            console.error('Error syncing implementation status:', error);
-        }
     };
 
     const FilterControls = ({ types, actions, activeFilters, setActiveFilters, onSelectAll, numSelected, numTotal }) => {
@@ -1450,7 +1438,7 @@ function App() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4 content-start">
                 {chats.map(chat => {
                     const serverChat = serverChats.find(s => s.id === chat.id);
-                    const isSynced = serverChat && stableStringify(chat.filledSchema) === stableStringify(serverChat.filledSchema);
+                    const isSynced = serverChat && stableStringify(chat.filledSchema) === stableStringify(serverChat.filledSchema) && stableStringify(chat.report || null) === stableStringify(serverChat.report || null);
                     const isSelected = selectedChats.includes(chat.id);
                     const updateStatus = updatedChats[chat.id];
 
@@ -1551,6 +1539,32 @@ function App() {
     const activeOriginalFile = originalFiles.find(f => activeDiffTab.includes(f.filePath));
     const activePendingChange = pendingChanges.find(f => activeDiffTab.includes(f.filePath));
 
+    const ReportViewer = ({ report }) => {
+        const cleanedReport = report.replace(/^"|"$/g, '').replace(/\\n/g, '\n').replace(/\\`\\`\\`/g, '```');
+    
+        const parts = cleanedReport.split(/(```[\s\S]*?```|`[^`]*?`)/);
+    
+        return (
+            <div className="text-xs text-gray-300 whitespace-pre-wrap break-all font-mono">
+                {parts.map((part, index) => {
+                    if (part.startsWith('```') && part.endsWith('```')) {
+                        const code = part.slice(3, -3).replace(/^\n|\n$/g, '');
+                        return (
+                            <pre key={index} className="bg-gray-800 p-2 rounded-md my-2 overflow-x-auto">
+                                <code>{code}</code>
+                            </pre>
+                        );
+                    }
+                    if (part.startsWith('`') && part.endsWith('`')) {
+                        const code = part.slice(1, -1);
+                        return <code key={index} className="bg-gray-700 text-red-400 rounded px-1 py-0.5">{code}</code>;
+                    }
+                    return <span key={index}>{part}</span>;
+                })}
+            </div>
+        );
+    };
+
     const SchemaModal = ({ chat, onClose, useClaude }) => {
         const [localSchemaView, setLocalSchemaView] = useState('split');
         const [localAnimatedSchema, setLocalAnimatedSchema] = useState(chat.filledSchema);
@@ -1560,7 +1574,7 @@ function App() {
 
         return (
             <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-                <div className="bg-gray-900 rounded-lg border border-gray-800 shadow-2xl flex flex-col w-full max-w-4xl h-full max-h-[90vh]">
+                <div className="bg-gray-900 rounded-lg border border-gray-800 shadow-2xl flex flex-col w-full max-w-6xl h-full max-h-[90vh]">
                     <div className="flex justify-between items-center p-3 border-b border-gray-800 flex-shrink-0">
                         <h2 className="text-base font-semibold text-gray-100">{chat.name}</h2>
                         <div className="flex space-x-1">
@@ -1574,31 +1588,41 @@ function App() {
                             </svg>
                         </button>
                     </div>
-                    <div className="flex-grow overflow-y-auto no-scrollbar filled-schema-panel">
-                        {localSchemaView === 'raw' && (
-                            <div className="flex-grow flex flex-col bg-gray-900">
-                                <pre className="flex-grow bg-gray-900 text-xs text-gray-300 p-3 overflow-auto whitespace-pre-wrap break-all font-mono no-scrollbar">
-                                    {JSON.stringify(chat.filledSchema, null, 2)}
-                                </pre>
-                            </div>
-                        )}
-                        {localSchemaView === 'split' && (
-                            <div className="flex-grow flex h-full overflow-hidden">
-                                <div className="w-1/2 h-full flex flex-col border-r border-gray-800">
+                    <div className="flex flex-grow overflow-hidden">
+                        <div className={`flex-grow overflow-y-auto no-scrollbar filled-schema-panel ${chat.report ? 'w-2/3' : 'w-full'}`}>
+                            {localSchemaView === 'raw' && (
+                                <div className="flex-grow flex flex-col bg-gray-900">
                                     <pre className="flex-grow bg-gray-900 text-xs text-gray-300 p-3 overflow-auto whitespace-pre-wrap break-all font-mono no-scrollbar">
                                         {JSON.stringify(chat.filledSchema, null, 2)}
                                     </pre>
                                 </div>
-                                <div className="w-1/2 h-full flex flex-col">
-                                    <div className="flex-grow bg-gray-900 text-xs text-gray-300 overflow-auto font-mono no-scrollbar">
-                                        <VisualizedSchemaView data={localAnimatedSchema} highlightedPaths={localHighlightedPaths} useClaude={useClaude} />
+                            )}
+                            {localSchemaView === 'split' && (
+                                <div className="flex-grow flex h-full overflow-hidden">
+                                    <div className="w-1/2 h-full flex flex-col border-r border-gray-800">
+                                        <pre className="flex-grow bg-gray-900 text-xs text-gray-300 p-3 overflow-auto whitespace-pre-wrap break-all font-mono no-scrollbar">
+                                            {JSON.stringify(chat.filledSchema, null, 2)}
+                                        </pre>
+                                    </div>
+                                    <div className="w-1/2 h-full flex flex-col">
+                                        <div className="flex-grow bg-gray-900 text-xs text-gray-300 overflow-auto font-mono no-scrollbar">
+                                            <VisualizedSchemaView data={localAnimatedSchema} highlightedPaths={localHighlightedPaths} useClaude={useClaude} />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-                        {localSchemaView === 'visualized' && (
-                            <div className="flex-grow bg-gray-900 text-xs text-gray-300 overflow-auto font-mono no-scrollbar">
-                                <VisualizedSchemaView data={localAnimatedSchema} highlightedPaths={localHighlightedPaths} useClaude={useClaude} />
+                            )}
+                            {localSchemaView === 'visualized' && (
+                                <div className="flex-grow bg-gray-900 text-xs text-gray-300 overflow-auto font-mono no-scrollbar">
+                                    <VisualizedSchemaView data={localAnimatedSchema} highlightedPaths={localHighlightedPaths} useClaude={useClaude} />
+                                </div>
+                            )}
+                        </div>
+                        {chat.report && (
+                            <div className="w-1/3 border-l border-gray-800 flex flex-col">
+                                <h3 className="text-base font-semibold p-3 border-b border-gray-800 text-gray-100">Validation Report</h3>
+                                <div className="flex-grow overflow-y-auto p-3 bg-gray-900 no-scrollbar">
+                                    <ReportViewer report={chat.report} />
+                                </div>
                             </div>
                         )}
                     </div>
