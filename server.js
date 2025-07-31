@@ -489,7 +489,7 @@ app.post('/api/validate-implementation', async (req, res) => {
         }
 
         const metadataString = JSON.stringify(schema || {});
-        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. Schema: ${metadataString}.`;
+        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. ONLY CONSIDER THE EVENT_METADATA FIELD---THE OTHER FIELDS SUCHAS TYPE ACTION LABEL AND DESCRIPTION ARE ONLY FOR YOU TO UNDERSTAND. Schema: ${metadataString}.`;
 
         let cliCommand, cliName, cliArgs;
         if (useClaude) {
