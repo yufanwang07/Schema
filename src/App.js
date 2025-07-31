@@ -803,37 +803,58 @@ function App() {
                 return file;
             });
 
-            for (const schema of schemasToValidate) {
-                const response = await fetch('/api/validate-implementation', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        schema: schema.filledSchema,
-                        files: trimmedFiles,
-                        useClaude: useClaude,
-                        useCli: useCli
-                    }),
+            const BATCH_SIZE = 5;
+            const batches = [];
+            for (let i = 0; i < schemasToValidate.length; i += BATCH_SIZE) {
+                batches.push(schemasToValidate.slice(i, i + BATCH_SIZE));
+            }
+
+            for (const batch of batches) {
+                const promises = batch.map(schema =>
+                    fetch('/api/validate-implementation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            schema: schema.filledSchema,
+                            files: trimmedFiles,
+                            useClaude: useClaude,
+                            useCli: useCli,
+                            id: schema.id
+                        }),
+                    }).then(async response => {
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`Failed to validate schema: ${schema.name}. ${errorText}`);
+                        }
+                        return response.json();
+                    })
+                );
+
+                const results = await Promise.all(promises);
+
+                setChats(prevChats => {
+                    const newChats = [...prevChats];
+                    results.forEach(result => {
+                        const chatIndex = newChats.findIndex(c => c.id === result.id);
+                        if (chatIndex > -1) {
+                            newChats[chatIndex] = {
+                                ...newChats[chatIndex],
+                                implemented: result.implemented,
+                                report: result.report
+                            };
+                        }
+                    });
+                    return newChats;
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Failed to validate schema: ${schema.name}`);
-                }
-
-                const result = await response.json();
-                
-                setSelectedGridChats(prev => prev.filter(id => id !== schema.id));
-
-                setChats(prevChats => prevChats.map(chat =>
-                    chat.id === schema.id
-                        ? { ...chat, implemented: result.implemented, report: result.report }
-                        : chat
-                ));
-
-                if (result.implemented) {
-                    setUpdatedChats(prev => ({ ...prev, [schema.id]: 'green' }));
-                } else {
-                    setUpdatedChats(prev => ({ ...prev, [schema.id]: 'red' }));
-                }
+                results.forEach(result => {
+                    setSelectedGridChats(prev => prev.filter(id => id !== result.id));
+                    if (result.implemented) {
+                        setUpdatedChats(prev => ({ ...prev, [result.id]: 'green' }));
+                    } else {
+                        setUpdatedChats(prev => ({ ...prev, [result.id]: 'red' }));
+                    }
+                });
             }
 
             setNotification({ message: 'Validation complete.', type: 'success' });

@@ -224,105 +224,13 @@ async function generateSchemaForPrompt(schema, prompt, conversationHistory, useC
 
     let systemPrompt;
     if (useCodeAgent) {
-        systemPrompt = `
-You are an intelligent assistant for generating and refining JSON schemas and modifying code. Your goal is to help the user create a valid JSON object based on a provided schema, answer questions, or modify code.
-You have three main capabilities:
-1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object. If you are provided with a generalized structure/no other conversational history, make sure to FILL OUT THE SCHEMA and not update the structure with default values or something similar.
-2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema or code, you will provide a helpful text-based answer.
-3.  **Code Agent**: If the user's prompt is about directly modifying code that doesn't have to do with logging or involves editing code, or something that seems to imply it (not related to logging-for stuff that seems ambiguous still assume the user wants to create a schema for that event), you will call the appropriate CLI to modify code.
-
-Analyze the user's prompt and the conversation history to determine the correct action.
-
-**Response Format:**
-You MUST respond with a JSON object containing two fields: "action" and "payload".
--   If you are updating the schema, the format is:
-    \`\`\`json
-    {
-      "action": "update_schema",
-      "payload": {
-        "schema": { ... the new JSON object ... },
-        "explanation": "A brief explanation of the changes you made."
-      }
-    }
-    \`\`\`
--   If you are answering a question, the format is:
-    \`\`\`json
-    {
-      "action": "answer_question",
-      "payload": {
-        "answer": "Your helpful and informative answer."
-      }
-    }
-    \`\`\`
-- If you are calling the code agent, the format is:
-    \`\`\`json
-    {
-        "action": "code_agent",
-        "payload": {
-            "prompt": "The user's prompt to be sent to the code agent.",
-            "explanation": "A brief explanation of what you are about to do. Don't mention the code agent in your response, just say like 'Adding ___...'"
-        }
-    }
-    \`\`\`
-
-**IMPORTANT:**
--   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.
--   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result
--   Base your response on the provided schema and the user's latest prompt.
-**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**
-${schema}
-**Conversation History:**
-${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
-**User's Prompt:**
-${prompt}
-If calling code agent, DO NOT SAY YOU CANNOT MODIFY CODE, BECAUSE YOU CAN BY RUNNING CODE AGENT. ONLY CALL THE CODE AGENT IF THE PROMPT HAS NOTHING TO DO WITH GENERATING SCHEMA OR LOGGING. The code is provided directly to code agent, not you. Just forward user's request directly to code agent.
-`;
+        systemPrompt = `\nYou are an intelligent assistant for generating and refining JSON schemas and modifying code. Your goal is to help the user create a valid JSON object based on a provided schema, answer questions, or modify code.\nYou have three main capabilities:\n1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object. If you are provided with a generalized structure/no other conversational history, make sure to FILL OUT THE SCHEMA and not update the structure with default values or something similar.\n2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema or code, you will provide a helpful text-based answer.\n3.  **Code Agent**: If the user's prompt is about directly modifying code that doesn't have to do with logging or involves editing code, or something that seems to imply it (not related to logging-for stuff that seems ambiguous still assume the user wants to create a schema for that event), you will call the appropriate CLI to modify code.\n\nAnalyze the user's prompt and the conversation history to determine the correct action.\n\n**Response Format:**\nYou MUST respond with a JSON object containing two fields: "action" and "payload".\n-   If you are updating the schema, the format is:\n    \`\`\`json\n    {\n      "action": "update_schema",\n      "payload": {\n        "schema": { ... the new JSON object ... },\n        "explanation": "A brief explanation of the changes you made."\n      }\n    }\n    \`\`\`\n-   If you are answering a question, the format is:\n    \`\`\`json\n    {\n      "action": "answer_question",\n      "payload": {\n        "answer": "Your helpful and informative answer."\n      }\n    }\n    \`\`\`\n- If you are calling the code agent, the format is:\n    \`\`\`json\n    {\n        "action": "code_agent",\n        "payload": {\n            "prompt": "The user's prompt to be sent to the code agent.",\n            "explanation": "A brief explanation of what you are about to do. Don't mention the code agent in your response, just say like 'Adding ___...'"\n        }\n    }\n    \`\`\`\n\n**IMPORTANT:**\n-   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.\n-   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result\n-   Base your response on the provided schema and the user's latest prompt.\n**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**\n${schema}\n**Conversation History:**\n${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}\n**User's Prompt:**\n${prompt}\nIf calling code agent, DO NOT SAY YOU CANNOT MODIFY CODE, BECAUSE YOU CAN BY RUNNING CODE AGENT. ONLY CALL THE CODE AGENT IF THE PROMPT HAS NOTHING TO DO WITH GENERATING SCHEMA OR LOGGING. The code is provided directly to code agent, not you. Just forward user's request directly to code agent.\n`;
     } else {
-        systemPrompt = `
-You are an intelligent assistant for generating and refining JSON schemas. Your goal is to help the user create a valid JSON object based on a provided schema or answer questions.
-You have two main capabilities:
-1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object.
-2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema, you will provide a helpful text-based answer.
-
-Analyze the user's prompt and the conversation history to determine the correct action.
-
-**Response Format:**
-You MUST respond with a JSON object containing two fields: "action" and "payload".
--   If you are updating the schema, the format is:
-    \`\`\`json
-    {
-      "action": "update_schema",
-      "payload": {
-        "schema": { ... the new JSON object ... },
-        "explanation": "A brief explanation of the changes you made."
-      }
-    }
-    \`\`\`
--   If you are answering a question, the format is:
-    \`\`\`json
-    {
-      "action": "answer_question",
-      "payload": {
-        "answer": "Your helpful and informative answer."
-      }
-    }
-    \`\`\`
-
-**IMPORTANT:**
--   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.
--   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result
--   Base your response on the provided schema and the user's latest prompt.
-**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**
-${schema}
-**Conversation History:**
-${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
-**User's Prompt:**
-${prompt}
-`;
+        systemPrompt = `\nYou are an intelligent assistant for generating and refining JSON schemas. Your goal is to help the user create a valid JSON object based on a provided schema or answer questions.\nYou have two main capabilities:\n1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object.\n2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema, you will provide a helpful text-based answer.\n\nAnalyze the user's prompt and the conversation history to determine the correct action.\n\n**Response Format:**\nYou MUST respond with a JSON object containing two fields: "action" and "payload".\n-   If you are updating the schema, the format is:\n    \`\`\`json\n    {\n      "action": "update_schema",\n      "payload": {\n        "schema": { ... the new JSON object ... },\n        "explanation": "A brief explanation of the changes you made."\n      }\n    }\n    \`\`\`\n-   If you are answering a question, the format is:\n    \`\`\`json\n    {\n      "action": "answer_question",\n      "payload": {\n        "answer": "Your helpful and informative answer."\n      }\n    }\n    \`\`\`\n\n**IMPORTANT:**\n-   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.\n-   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result\n-   Base your response on the provided schema and the user's latest prompt.\n**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**\n${schema}\n**Conversation History:**\n${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}\n**User's Prompt:**\n${prompt}\n`;
     }
 
     const result = await model.generateContent(systemPrompt);
-    const response = await result.response;
+    const response = result.response;
     const text = response.text();
     const jsonResponse = text.replace(/```json\n/g, '').replace(/```/g, '').trim();
     return JSON.parse(jsonResponse);
@@ -476,12 +384,16 @@ app.post('/api/code-agent', async (req, res) => {
     }
 });
 
+
+
 app.post('/api/validate-implementation', async (req, res) => {
-    const { schema, files, useClaude, useCli } = req.body;
-    console.log("received");
-    if (!schema || !files || !Array.isArray(files)) {
-        return res.status(400).json({ error: 'Schema and an array of files are required' });
+    const { schema, files, useClaude, useCli, id } = req.body;
+    if (!schema || !files || !Array.isArray(files) || !id) {
+        return res.status(400).json({ error: 'Schema, an array of files, and an ID are required' });
     }
+
+    const uniqueDirName = `USER_FILES_VALIDATE_${Date.now()}_${id}`;
+    const userFilesDir = path.join(__dirname, uniqueDirName);
 
     // Shortcut for schemas with no metadata
     if (schema.event_metadata && Object.keys(schema.event_metadata).length === 0) {
@@ -503,16 +415,12 @@ app.post('/api/validate-implementation', async (req, res) => {
         }
         if (found) {
             console.log(`Found log.event for "${eventName}" with empty metadata, skipping CLI process.`);
-            return res.status(200).json({ implemented: true });
+            return res.status(200).json({ implemented: true, id: id });
         }
     }
 
-    const userFilesDir = path.join(__dirname, 'USER_FILES');
-
     try {
-        await fs.rm(userFilesDir, { recursive: true, force: true });
         await fs.mkdir(userFilesDir, { recursive: true });
-        console.log("cleaned");
 
         for (const file of files) {
             const filePath = path.join(userFilesDir, file.filePath);
@@ -525,6 +433,7 @@ app.post('/api/validate-implementation', async (req, res) => {
         const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for the logged event name as content in THE FILE CONTENT OF EVERY FILE *RECURSIVELY* (not filenames!), as well as likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. If event_metadata field is just {} assume no additional information is needed to be logged. ONLY CONSIDER THE EVENT_METADATA FIELD---THE OTHER FIELDS SUCHAS TYPE ACTION LABEL AND DESCRIPTION ARE ONLY FOR YOU TO UNDERSTAND. Logging should have a call to .event (commonly log.event) or .queueAppsFlyerEvent Schema: ${metadataString}. Return the relevant code segment of the logging as well (maybe 5 lines maximum) if found or incorrectly implemented`;
 
         let cliCommand, cliName, cliArgs;
+        console.log("Spawning");
         if (useClaude) {
             cliName = 'Claude';
             cliCommand = 'claude';
@@ -534,8 +443,6 @@ app.post('/api/validate-implementation', async (req, res) => {
             cliCommand = 'gemini';
             cliArgs = ['--yolo', `-p "${prompt.replace(/"/g, '\'')}"`];
         }
-
-        console.log("spawning")
 
         const child = spawn(cliCommand, cliArgs, {
             cwd: userFilesDir,
@@ -549,54 +456,47 @@ app.post('/api/validate-implementation', async (req, res) => {
 
         child.stdout.on('data', chunk => {
             stdoutData += chunk.toString();
-            console.log('[GEMINI stdout]', chunk.toString());
+            console.log("[STDOUT] " + chunk.toString());
         });
         child.stderr.on('data', chunk => {
             stderrData += chunk.toString();
-            console.log('[GEMINI stdout]', chunk.toString());
+            console.error(chunk.toString());
         });
 
         child.on('close', async (code) => {
-            if (code !== 0) {
-                console.error(`[${cliName} stderr]:`, stderrData);
-                return res.status(500).json({ error: `${cliName} process exited with an error.`, details: stderrData });
-            }
-            
             try {
-                await fs.rm(userFilesDir, { recursive: true, force: true });
-                console.log('USER_FILES directory cleared for /api/validate-implementation');
-            } catch (err) {
-                console.error('Error clearing USER_FILES directory for /api/validate-implementation:', err);
-            }
-
-            try {
-                console.log("parser triggered")
+                if (code !== 0) {
+                    console.error(`[${cliName} stderr]:`, stderrData);
+                    return res.status(500).json({ error: `${cliName} process exited with an error.`, details: stderrData });
+                }
+                
                 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-                const validationPrompt = `Based on the following response from a previous verification agent, determine if the schema is correctly implemented. The implementation is correct if the event_metadata is logged. An incorrect implementation is not an implementation. Return a JSON object with a single boolean field, "implemented".
-
-Response:
-${stdoutData}`;
+                const validationPrompt = `Based on the following response from a previous verification agent, determine if the schema is correctly implemented. The implementation is correct if the event_metadata is logged. An incorrect implementation is not an implementation. Return a JSON object with a single boolean field, \"implemented\".\n\nResponse:\n${stdoutData}`;
                 
-                console.log("generating")
                 const result = await model.generateContent(validationPrompt);
-                
-                console.log("finished generating")
                 const response = result.response;
                 const text = response.text();
                 const jsonResponse = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
 
                 const reportPrompt = `Based on the following response from a previous verification agent, provide a concise (1-2 sentences) report on whether the implementation is correct and why, including the relevant code segment. Return a single string.\n\nResponse:\n${stdoutData}`;
                 const reportResult = await model.generateContent(reportPrompt);
-                const reportResponse = await reportResult.response;
+                const reportResponse = reportResult.response;
                 const reportText = reportResponse.text();
+                console.log(reportText);
                 
                 jsonResponse.report = reportText;
+                jsonResponse.id = id;
                 
-                console.log("returning " + JSON.stringify(jsonResponse))
                 res.status(200).json(jsonResponse);
             } catch (error) {
                 console.error('Error validating implementation with Gemini API:', error);
                 res.status(500).json({ error: `Failed to validate implementation with Gemini API: ${error.message}` });
+            } finally {
+                try {
+                    await fs.rm(userFilesDir, { recursive: true, force: true });
+                } catch (err) {
+                    console.error(`Error clearing validation directory:`, err);
+                }
             }
         });
 
@@ -756,10 +656,9 @@ app.post('/api/inject-logging', async (req, res) => {
         // Step 1: Send instructions/file structure to Gemini to get relevant folders
         const fullFileStructure = files.map(file => file.filePath).join('\n');
 
-        let initialPrompt = `You are an AI assistant that helps identify relevant parts of a codebase for injecting logging functionality.\nGiven the following file structure of a codebase, identify the subfolders under *any* 'domain/' and 'ui/' directories that are most likely relevant for injecting logging based on this schema: ${JSON.stringify(schema, null, 2)}
-You should only return the relative paths of these relevant subfolders, one per line. Do not include files directly under 'domain/' or 'ui/' directories, only their subfolders.\nIf no subfolders are relevant, return an empty array.\n\nExample Output:\n[\n  "src/domain/users/models",\n  "frontend/ui/components/buttons"\n]\n\nFile Structure:\n\`\`\`\n${fullFileStructure}\n\`\`\`\n`;
-        initialPrompt = initialPrompt.replace("\"", "\'")
-try {
+        let initialPrompt = `You are an AI assistant that helps identify relevant parts of a codebase for injecting logging functionality.\nGiven the following file structure of a codebase, identify the subfolders under *any* 'domain/' and 'ui/' directories that are most likely relevant for injecting logging based on this schema: ${JSON.stringify(schema, null, 2)}\nYou should only return the relative paths of these relevant subfolders, one per line. Do not include files directly under 'domain/' or 'ui/' directories, only their subfolders.\nIf no subfolders are relevant, return an empty array.\n\nExample Output:\n[\n  "src/domain/users/models",\n  "frontend/ui/components/buttons"\n]\n\nFile Structure:\n\`\`\`\n${fullFileStructure}\n\`\`\`\n`;
+        initialPrompt = initialPrompt.replace("\"", "'")
+        try {
             const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // Using a capable model for this step
             const result = await model.generateContent(initialPrompt);
             const response = await result.response;
@@ -811,8 +710,7 @@ try {
 
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
-        const prompt = `You are an AI assistant that helps inject logging functionality into existing codebases. Given a JSON schema, and the contents of its files, you need to generate the necessary code to log data conforming to the schema and integrate it into the correct file(s). The generated code should be idiomatic for the language and framework detected in the file. You must return an array of objects, where each object contains the 'filePath' (relative to the project root) and its 'modifiedContent'. 
-        Only include files that you have modified. If no files are modified, return an empty array.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\nFile Structure of the Codebase:\n\`\`\`\n${fileStructureForMainPrompt}\n\`\`\`\n\nContents of Files:\n\`\`\`json\n${JSON.stringify(filesToSendToGemini, null, 0)}\n\`\`\`\n\nInstructions:\n1. Analyze the file structure and contents to identify the most appropriate file(s) for injecting logging functionality. Consider where the data relevant to the schema would be generated or processed.\n2. Generate code that, when inserted into the target file(s), will:\n    - Define a logging function or mechanism that accepts data conforming to the provided schema.\n3. Return an array of JSON objects. Each object must have a 'filePath' (relative to the project root) and 'modifiedContent' field. Only include files that you have modified. If no files are modified, return an empty array.\n\nExample of expected output format:\n\`\`\`json\n[\n  {\n    "filePath": "src/utils/logger.js",\n    "modifiedContent": "// Original content of logger.js\n\nfunction logEvent(data) {\n  console.log('Logging event:', data);\n}\n\n// Example usage\nlogEvent({\n  // ... sample data based on schema ...\n});\n"\n  },\n  {\n    "filePath": "src/components/SomeComponent.js",\n    "modifiedContent": "// Original content of SomeComponent.js\n\n// ... some code ...\n\n// Call the logging function\nlogEvent({\n  // ... relevant data from component ...\n});\n"\n  }\n]\n\`\`\`\n\nNow, provide the array of modified file contents.`
+        const prompt = `You are an AI assistant that helps inject logging functionality into existing codebases. Given a JSON schema, and the contents of its files, you need to generate the necessary code to log data conforming to the schema and integrate it into the correct file(s). The generated code should be idiomatic for the language and framework detected in the file. You must return an array of objects, where each object contains the 'filePath' (relative to the project root) and its 'modifiedContent'. \n        Only include files that you have modified. If no files are modified, return an empty array.\n\nJSON Schema:\n\`\`\`json\n${JSON.stringify(schema, null, 2)}\n\`\`\`\n\nFile Structure of the Codebase:\n\`\`\`\n${fileStructureForMainPrompt}\n\`\`\`\n\nContents of Files:\n\`\`\`json\n${JSON.stringify(filesToSendToGemini, null, 0)}\n\`\`\`\n\nInstructions:\n1. Analyze the file structure and contents to identify the most appropriate file(s) for injecting logging functionality. Consider where the data relevant to the schema would be generated or processed.\n2. Generate code that, when inserted into the target file(s), will:\n    - Define a logging function or mechanism that accepts data conforming to the provided schema.\n3. Return an array of JSON objects. Each object must have a 'filePath' (relative to the project root) and 'modifiedContent' field. Only include files that you have modified. If no files are modified, return an empty array.\n\nExample of expected output format:\n\`\`\`json\n[\n  {\n    "filePath": "src/utils/logger.js",\n    "modifiedContent": "// Original content of logger.js\n\nfunction logEvent(data) {\n  console.log('Logging event:', data);\n}\n\n// Example usage\nlogEvent({\n  // ... sample data based on schema ...\n});\n"\n  },\n  {\n    "filePath": "src/components/SomeComponent.js",\n    "modifiedContent": "// Original content of SomeComponent.js\n\n// ... some code ...\n\n// Call the logging function\nlogEvent({\n  // ... relevant data from component ...\n});\n"\n  }\n]\n\`\`\`\n\nNow, provide the array of modified file contents.`
         console.log(prompt.length)
         const result = await model.generateContent(prompt);
         const response = await result.response;
