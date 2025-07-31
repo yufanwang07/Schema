@@ -1284,10 +1284,10 @@ function App() {
     // Helper function to recursively read files from a DirectoryHandle
     const readAllFilesFromDirectoryHandle = async (directoryHandle, relativePath = '', useCli = false) => {
         const files = [];
-        const IGNORE_DIRS_COMMON = ['node_modules', '.git', '.env', 'img', 'build', 'dist', 'out', 'temp', 'backups', 'assets', 'res', 'example', 'data', 'sync', 'util', '.gradle', '.idea'];
-        const IGNORE_DIRS_NOVO = ['node_modules', '.git', '.env', 'img', 'build', 'dist', 'out', 'temp', 'backups', 'assets', 'example', '.gradle', '.idea', 'test', 'core', 'fastlane', 'gradle', 'Jenkins', 'raw']; // Add Novo specific ignored directories here
+        const IGNORE_DIRS_COMMON = ['__pycache__', 'node_modules', '.git', '.env', 'img', 'build', 'dist', 'out', 'temp', 'backups', 'assets', 'res', 'example', 'data', 'sync', 'util', '.gradle', '.idea'];
+        const IGNORE_DIRS_NOVO = ['__pycache__', 'node_modules', '.git', '.env', 'img', 'build', 'dist', 'out', 'temp', 'backups', 'assets', 'example', '.gradle', '.idea', 'test', 'core', 'fastlane', 'gradle', 'Jenkins', 'raw']; // Add Novo specific ignored directories here
         const IGNORE_DIRS = isNovo ? IGNORE_DIRS_NOVO : IGNORE_DIRS_COMMON;
-        const IGNORE_EXTENSIONS = ['.lock', '.ttf', '.properties', '.gradle', '.json', '.env', '.git', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.gitignore', '.ico', '.mp3', '.wav', '.mp4', '.mov', '.avi', '.wmv', '.pdf', '.doc', '.docx', '.ppt', '.pptx'];
+        const IGNORE_EXTENSIONS = ['.apk', '.lock', '.ttf', '.properties', '.gradle', '.json', '.env', '.git', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.gitignore', '.ico', '.mp3', '.wav', '.mp4', '.mov', '.avi', '.wmv', '.pdf', '.doc', '.docx', '.ppt', '.pptx'];
 
         for await (const entry of directoryHandle.values()) {
             const entryPath = `${relativePath}/${entry.name}`;
