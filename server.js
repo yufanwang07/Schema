@@ -102,13 +102,13 @@ const loadLatestBackup = async () => {
 
 // Endpoint to save a schema
 app.post('/api/schemas', (req, res) => {
-    const { id, name, filledSchema, implemented, report } = req.body;
+    const { id, name, filledSchema, implemented, report, tags } = req.body;
     if (!id || !name || !filledSchema) {
         return res.status(400).json({ error: 'id, name, and filledSchema are required' });
     }
     // Check if schema with same ID already exists and update it
     const existingIndex = storedSchemas.findIndex(s => s.id === id);
-    const schemaData = { id, name, filledSchema, implemented, report: report || null };
+    const schemaData = { id, name, filledSchema, implemented, report: report || null, tags: tags || [] };
     if (existingIndex > -1) {
         storedSchemas[existingIndex] = schemaData;
         console.log(`Updated schema with ID: ${id}`);
@@ -220,14 +220,106 @@ app.post('/api/batch-schemas', async (req, res) => {
 });
 
 async function generateSchemaForPrompt(schema, prompt, conversationHistory, useCodeAgent) {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     let systemPrompt;
     if (useCodeAgent) {
-        systemPrompt = `\nYou are an intelligent assistant for generating and refining JSON schemas and modifying code. Your goal is to help the user create a valid JSON object based on a provided schema, answer questions, or modify code.\nYou have three main capabilities:\n1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object. If you are provided with a generalized structure/no other conversational history, make sure to FILL OUT THE SCHEMA and not update the structure with default values or something similar.\n2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema or code, you will provide a helpful text-based answer.\n3.  **Code Agent**: If the user's prompt is about directly modifying code that doesn't have to do with logging or involves editing code, or something that seems to imply it (not related to logging-for stuff that seems ambiguous still assume the user wants to create a schema for that event), you will call the appropriate CLI to modify code.\n\nAnalyze the user's prompt and the conversation history to determine the correct action.\n\n**Response Format:**\nYou MUST respond with a JSON object containing two fields: "action" and "payload".\n-   If you are updating the schema, the format is:\n    \`\`\`json\n    {\n      "action": "update_schema",\n      "payload": {\n        "schema": { ... the new JSON object ... },\n        "explanation": "A brief explanation of the changes you made."\n      }\n    }\n    \`\`\`\n-   If you are answering a question, the format is:\n    \`\`\`json\n    {\n      "action": "answer_question",\n      "payload": {\n        "answer": "Your helpful and informative answer."\n      }\n    }\n    \`\`\`\n- If you are calling the code agent, the format is:\n    \`\`\`json\n    {\n        "action": "code_agent",\n        "payload": {\n            "prompt": "The user's prompt to be sent to the code agent.",\n            "explanation": "A brief explanation of what you are about to do. Don't mention the code agent in your response, just say like 'Adding ___...'"\n        }\n    }\n    \`\`\`\n\n**IMPORTANT:**\n-   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.\n-   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result\n-   Base your response on the provided schema and the user's latest prompt.\n**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**\n${schema}\n**Conversation History:**\n${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}\n**User's Prompt:**\n${prompt}\nIf calling code agent, DO NOT SAY YOU CANNOT MODIFY CODE, BECAUSE YOU CAN BY RUNNING CODE AGENT. ONLY CALL THE CODE AGENT IF THE PROMPT HAS NOTHING TO DO WITH GENERATING SCHEMA OR LOGGING. The code is provided directly to code agent, not you. Just forward user's request directly to code agent.\n`;
-    } else {
-        systemPrompt = `\nYou are an intelligent assistant for generating and refining JSON schemas. Your goal is to help the user create a valid JSON object based on a provided schema or answer questions.\nYou have two main capabilities:\n1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object.\n2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema, you will provide a helpful text-based answer.\n\nAnalyze the user's prompt and the conversation history to determine the correct action.\n\n**Response Format:**\nYou MUST respond with a JSON object containing two fields: "action" and "payload".\n-   If you are updating the schema, the format is:\n    \`\`\`json\n    {\n      "action": "update_schema",\n      "payload": {\n        "schema": { ... the new JSON object ... },\n        "explanation": "A brief explanation of the changes you made."\n      }\n    }\n    \`\`\`\n-   If you are answering a question, the format is:\n    \`\`\`json\n    {\n      "action": "answer_question",\n      "payload": {\n        "answer": "Your helpful and informative answer."\n      }\n    }\n    \`\`\`\n\n**IMPORTANT:**\n-   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.\n-   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result\n-   Base your response on the provided schema and the user's latest prompt.\n**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**\n${schema}\n**Conversation History:**\n${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}\n**User's Prompt:**\n${prompt}\n`;
+        systemPrompt = `
+You are an intelligent assistant for generating and refining JSON schemas and modifying code. Your goal is to help the user create a valid JSON object based on a provided schema, answer questions, or modify code.
+You have three main capabilities:
+1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object. If you are provided with a generalized structure/no other conversational history, make sure to FILL OUT THE SCHEMA and not update the structure with default values or something similar.
+2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema or code, you will provide a helpful text-based answer.
+3.  **Code Agent**: If the user's prompt is about directly modifying code that doesn't have to do with logging or involves editing code, or something that seems to imply it (not related to logging-for stuff that seems ambiguous still assume the user wants to create a schema for that event), you will call the appropriate CLI to modify code.
+
+Analyze the user's prompt and the conversation history to determine the correct action.
+
+**Response Format:**
+You MUST respond with a JSON object containing two fields: "action" and "payload".
+-   If you are updating the schema, the format is:
+    \`\\\`json
+    {
+      "action": "update_schema",
+      "payload": {
+        "schema": { ... the new JSON object ... },
+        "explanation": "A brief explanation of the changes you made.",
+        "tag": "the_selected_tag_or_other"
+      }
     }
+    \`\\\`
+-   If you are answering a question, the format is:
+    \`\\\`json
+    {
+      "action": "answer_question",
+      "payload": {
+        "answer": "Your helpful and informative answer."
+      }
+    }
+    \`\\\`
+- If you are calling the code agent, the format is:
+    \`\\\`json
+    {
+        "action": "code_agent",
+        "payload": {
+            "prompt": "The user's prompt for the code agent.",
+            "explanation": "An explanation of why you are calling the code agent."
+        }
+    }
+    \`\\\`
+
+**IMPORTANT:**
+-   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.
+-   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result
+-   Base your response on the provided schema and the user's latest prompt.
+**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**
+${schema}
+
+**Conversation History:**
+${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+
+**User Prompt:**
+${prompt}`;    } else {        systemPrompt = `
+You are an intelligent assistant for generating and refining JSON schemas. Your goal is to help the user create a valid JSON object based on a provided schema or answer questions.
+You have two main capabilities:
+1.  **Update Schema**: If the user's prompt is asking to fill, modify, or update the JSON schema, you will return a valid JSON object.
+2.  **Answer Question**: If the user is asking a question, seeking clarification, or having a conversation that does not involve changing the schema, you will provide a helpful text-based answer.
+
+Analyze the user's prompt and the conversation history to determine the correct action.
+
+**Response Format:**
+You MUST respond with a JSON object containing two fields: "action" and "payload".
+-   If you are updating the schema, the format is:
+    \`\\\`json
+    {
+      "action": "update_schema",
+      "payload": {
+        "schema": { ... the new JSON object ... },
+        "explanation": "A brief explanation of the changes you made.",
+        "tag": "the_selected_tag_or_other"
+      }
+    }
+    \`\\\`
+-   If you are answering a question, the format is:
+    \`\\\`json
+    {
+      "action": "answer_question",
+      "payload": {
+        "answer": "Your helpful and informative answer."
+      }
+    }
+    \`\\\`
+
+**IMPORTANT:**
+-   When updating the schema, ensure the output is a single, valid JSON object. Do not include any extra text or markdown formatting around the JSON payload.
+-   The \`payload.schema\` should be the complete, filled-out JSON object. Do not include the provided structure (if applicable) in your response; only return the filled out information. If an applicable schema is already given, only modify and give the modified result
+-   Base your response on the provided schema and the user's latest prompt.
+**Current Schema: If this is a structure describing the format, create a json in this format. Otherwise, only make minor updates to it. DO NOT INCLUDE THE PROVIDED SAMPLE STRUCTURE IN YOUR RESPONSE.**
+${schema}
+
+**Conversation History:**
+${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+
+**User Prompt:**
+${prompt}`;    }
 
     const result = await model.generateContent(systemPrompt);
     const response = result.response;

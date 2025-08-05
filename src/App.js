@@ -215,11 +215,22 @@ function App() {
     const [animatedSchema, setAnimatedSchema] = useState(null);
     const [highlightedPaths, setHighlightedPaths] = useState([]);
     const [animatedValues, setAnimatedValues] = useState({});
-    const [activeFilters, setActiveFilters] = useState({ event_type: [], event_action: [], status: [] });
+    const [activeFilters, setActiveFilters] = useState({ event_type: [], event_action: [], status: [], tags: [] });
     const [selectedGridChats, setSelectedGridChats] = useState([]);
     const [gridVersion, setGridVersion] = useState(0);
     const [isValidating, setIsValidating] = useState(false);
     const [updatedChats, setUpdatedChats] = useState({}); // { [chatId]: 'green' | 'red' }
+    const [tags, setTags] = useState([]);
+    const [newTag, setNewTag] = useState('');
+    const [allTags, setAllTags] = useState(() => {
+        try {
+            const savedTags = localStorage.getItem('allTags');
+            return savedTags ? JSON.parse(savedTags) : [];
+        } catch (error) {
+            console.error("Failed to load tags from local storage during initialization:", error);
+            return [];
+        }
+    });
 
     const handleGridItemSelect = (chatId) => {
         setSelectedGridChats(prevSelected => {
@@ -256,8 +267,9 @@ function App() {
                 }
                 return false;
             });
+            const tagsMatch = activeFilters.tags?.length === 0 || (chat.tags || []).some(tag => activeFilters.tags.includes(tag));
 
-            return typeMatch && actionMatch && statusMatch;
+            return typeMatch && actionMatch && statusMatch && tagsMatch;
         });
         setFilteredGridChats(filtered);
     }, [chats, activeFilters, serverChats]);
@@ -363,6 +375,14 @@ function App() {
             console.error("Failed to save chats to local storage:", error);
         }
     }, [chats]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('allTags', JSON.stringify(allTags));
+        } catch (error) {
+            console.error("Failed to save tags to local storage:", error);
+        }
+    }, [allTags]);
 
     useEffect(() => {
         if (notification.message) {
@@ -566,7 +586,8 @@ function App() {
                     id: chatToSync.id,
                     name: chatToSync.name,
                     filledSchema: chatToSync.filledSchema,
-                    implemented: chatToSync.implemented
+                    implemented: chatToSync.implemented,
+                    tags: chatToSync.tags || []
                 }),
             });
             if (!response.ok) {
@@ -581,7 +602,8 @@ function App() {
                     id: chatToSync.id,
                     name: chatToSync.name,
                     filledSchema: chatToSync.filledSchema,
-                    implemented: chatToSync.implemented
+                    implemented: chatToSync.implemented,
+                    tags: chatToSync.tags || []
                 };
                 if (existingServerChatIndex > -1) {
                     const updatedServerChats = [...prevServerChats];
@@ -649,7 +671,8 @@ function App() {
                         schema: baseSchemaString, // Always provide the base schema
                         isNew: true,
                         implemented: serverSchema.implemented,
-                        report: serverSchema.report || null
+                        report: serverSchema.report || null,
+                        tags: serverSchema.tags || []
                     };
 
                     if (existingChatIndex > -1) {
@@ -695,7 +718,8 @@ function App() {
                             id: chat.id,
                             name: chat.name,
                             filledSchema: chat.filledSchema,
-                            implemented: chat.implemented
+                            implemented: chat.implemented,
+                            tags: chat.tags || []
                         }),
                     });
                     if (!response.ok) {
@@ -803,15 +827,12 @@ function App() {
                 return file;
             });
 
-            const BATCH_SIZE = 5;
-            const batches = [];
-            for (let i = 0; i < schemasToValidate.length; i += BATCH_SIZE) {
-                batches.push(schemasToValidate.slice(i, i + BATCH_SIZE));
-            }
+            const BATCH_SIZE = useClaude ? 10 : 4;
+            const queue = [...schemasToValidate];
 
-            for (const batch of batches) {
-                const promises = batch.map(schema =>
-                    fetch('/api/validate-implementation', {
+            const processSchema = async (schema) => {
+                try {
+                    const response = await fetch('/api/validate-implementation', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -821,20 +842,17 @@ function App() {
                             useCli: useCli,
                             id: schema.id
                         }),
-                    }).then(async response => {
-                        if (!response.ok) {
-                            const errorText = await response.text();
-                            throw new Error(`Failed to validate schema: ${schema.name}. ${errorText}`);
-                        }
-                        return response.json();
-                    })
-                );
+                    });
 
-                const results = await Promise.all(promises);
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Failed to validate schema: ${schema.name}. ${errorText}`);
+                    }
 
-                setChats(prevChats => {
-                    const newChats = [...prevChats];
-                    results.forEach(result => {
+                    const result = await response.json();
+
+                    setChats(prevChats => {
+                        const newChats = [...prevChats];
                         const chatIndex = newChats.findIndex(c => c.id === result.id);
                         if (chatIndex > -1) {
                             newChats[chatIndex] = {
@@ -843,19 +861,36 @@ function App() {
                                 report: result.report
                             };
                         }
+                        return newChats;
                     });
-                    return newChats;
-                });
 
-                results.forEach(result => {
                     setSelectedGridChats(prev => prev.filter(id => id !== result.id));
                     if (result.implemented) {
                         setUpdatedChats(prev => ({ ...prev, [result.id]: 'green' }));
                     } else {
                         setUpdatedChats(prev => ({ ...prev, [result.id]: 'red' }));
                     }
-                });
+                } catch (error) {
+                    console.error('Error validating schema:', error);
+                    setNotification({ message: `Error validating ${schema.name}: ${error.message}`, type: 'error' });
+                }
+            };
+
+            const worker = async () => {
+                while (queue.length > 0) {
+                    const schema = queue.shift();
+                    if (schema) {
+                        await processSchema(schema);
+                    }
+                }
+            };
+
+            const workers = [];
+            for (let i = 0; i < BATCH_SIZE; i++) {
+                workers.push(worker());
             }
+
+            await Promise.all(workers);
 
             setNotification({ message: 'Validation complete.', type: 'success' });
         } catch (error) {
@@ -1030,9 +1065,12 @@ function App() {
             ? JSON.stringify(chatToUse.filledSchema, null, 2)
             : "Here's the structure. Fill out according to this structure. Make sure you don't include this in the output:\n" + chatToUse.schema;
 
-        let fullPrompt = prompt;
+        const tagsPrompt = allTags.length > 0 ? `\n\nHere are the existing tags, please select the most relevant one for this schema, or select \'other\' if none are applicable. Return your choice in the \'tag\' field of your response: ${JSON.stringify(allTags)}` : '';
+
+
+        let fullPrompt = prompt + tagsPrompt;
         if (attachedFileContent) {
-            fullPrompt = `User message: ${prompt}\n\nAttached file content:\n${attachedFileContent}`;
+            fullPrompt = `User message: ${prompt}\n\nAttached file content:\n${attachedFileContent}${tagsPrompt}`;
         }
 
         try {
@@ -1057,7 +1095,7 @@ function App() {
             let updatedChat = { ...chatToUse, messages: updatedMessages };
 
             if (data.action === 'update_schema') {
-                const { schema, explanation } = data.payload;
+                const { schema, explanation, tag } = data.payload;
                 const assistantMessage = { role: 'assistant', content: explanation };
                 finalMessages = [...updatedMessages, assistantMessage];
 
@@ -1069,7 +1107,13 @@ function App() {
                         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                         .join(' ');
                 }
-                updatedChat = { ...chatToUse, name: eventName, messages: finalMessages, filledSchema: schema || null, implemented: false };
+
+                const newTags = chatToUse.tags ? [...chatToUse.tags] : [];
+                if (tag && tag !== 'other' && !newTags.includes(tag)) {
+                    newTags.push(tag);
+                }
+
+                updatedChat = { ...chatToUse, name: eventName, messages: finalMessages, filledSchema: schema || null, implemented: false, tags: newTags };
 
             } else if (data.action === 'answer_question') {
                 const { answer } = data.payload;
@@ -1375,11 +1419,80 @@ function App() {
         setChats(prevChats => prevChats.map(chat => chat.id === chatId ? { ...chat, implemented: true } : chat));
     };
 
-    const handleUnimplement = (chatId) => {
+        const handleUnimplement = (chatId) => {
         setChats(prevChats => prevChats.map(chat => chat.id === chatId ? { ...chat, implemented: false } : chat));
     };
 
-    const FilterControls = ({ types, actions, activeFilters, setActiveFilters, onSelectAll, numSelected, numTotal }) => {
+    const handleSaveTags = (chatId, tags) => {
+        setChats(prevChats => prevChats.map(chat => chat.id === chatId ? { ...chat, tags } : chat));
+    };
+
+    const handleAssignTagToSelectedChats = (tag) => {
+        setChats(prevChats => prevChats.map(chat => {
+            if (selectedGridChats.includes(chat.id)) {
+                const newTags = chat.tags ? [...new Set([...chat.tags, tag])] : [tag];
+                return { ...chat, tags: newTags };
+            }
+            return chat;
+        }));
+    };
+
+    const handleRemoveTagFromSelectedChats = (tag) => {
+        setChats(prevChats => prevChats.map(chat => {
+            if (selectedGridChats.includes(chat.id)) {
+                const newTags = (chat.tags || []).filter(t => t !== tag);
+                return { ...chat, tags: newTags };
+            }
+            return chat;
+        }));
+    };
+
+    const TagsInput = ({ tags, onTagsChange }) => {
+        const [inputValue, setInputValue] = useState('');
+
+        const handleInputChange = (e) => {
+            setInputValue(e.target.value);
+        };
+
+        const handleInputKeyDown = (e) => {
+            if (e.key === 'Enter' && inputValue.trim()) {
+                e.preventDefault();
+                if (!tags.includes(inputValue.trim())) {
+                    onTagsChange([...tags, inputValue.trim()]);
+                    setInputValue('');
+                }
+            } else if (e.key === 'Backspace' && !inputValue) {
+                onTagsChange(tags.slice(0, -1));
+            }
+        };
+
+        const removeTag = (tagToRemove) => {
+            onTagsChange(tags.filter(tag => tag !== tagToRemove));
+        };
+
+        return (
+            <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-800 rounded-md">
+                {tags.map(tag => (
+                    <div key={tag} className="flex items-center bg-purple-600 text-white px-2 py-1 rounded-full text-xs">
+                        <span>{tag}</span>
+                        <button onClick={() => removeTag(tag)} className="ml-2 text-white">&times;</button>
+                    </div>
+                ))}
+                <input
+                    type="text"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onKeyDown={handleInputKeyDown}
+                    placeholder="Add a tag..."
+                    className="bg-transparent focus:outline-none text-sm text-gray-300 flex-grow"
+                />
+            </div>
+        );
+    };
+
+    const FilterControls = ({ types, actions, tags, activeFilters, setActiveFilters, onSelectAll, numSelected, numTotal, onAddNewTag, onAssignTag, onRemoveTag }) => {
+        const [showNewTagInput, setShowNewTagInput] = useState(false);
+        const [newTagValue, setNewTagValue] = useState('');""
         const handleFilterChange = (filterType, value) => {
             setActiveFilters(prev => {
                 const currentFilters = prev[filterType];
@@ -1389,6 +1502,14 @@ function App() {
                     return { ...prev, [filterType]: [...currentFilters, value] };
                 }
             });
+        };
+
+        const handleAddNewTag = () => {
+            if (newTagValue.trim() && onAddNewTag) {
+                onAddNewTag(newTagValue.trim());
+                setNewTagValue('');
+                setShowNewTagInput(false);
+            }
         };
 
         return (
@@ -1402,52 +1523,126 @@ function App() {
                         {numSelected >= numTotal && numTotal > 0 ? 'Deselect All' : 'Select All'}
                     </button>
                 </div>
-                <div className="mb-2">
-                    <h3 className="text-sm font-semibold text-gray-300 mb-1">Event Type</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {types.map(type => (
-                            <button
-                                key={type}
-                                onClick={() => handleFilterChange('event_type', type)}
-                                className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${activeFilters.event_type.includes(type) ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-                                {type}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div className="mb-2">
-                    <h3 className="text-sm font-semibold text-gray-300 mb-1">Event Action</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {actions.map(action => (
-                            <button
-                                key={action}
-                                onClick={() => handleFilterChange('event_action', action)}
-                                className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${activeFilters.event_action.includes(action) ? 'bg-teal-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-                                {action}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-1">Status</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {['Implemented', 'Modified', 'Unchanged'].map(status => {
-                            const isActive = activeFilters.status.includes(status);
-                            let colorClass = 'bg-gray-700 text-gray-300 hover:bg-gray-600';
-                            if (isActive) {
-                                if (status === 'Implemented') colorClass = 'bg-green-600 text-white';
-                                else if (status === 'Modified') colorClass = 'bg-blue-600 text-white';
-                                else if (status === 'Unchanged') colorClass = 'bg-white text-black';
-                            }
-                            return (
+                <div className="grid grid-cols-5 gap-4">
+                    <div className="col-span-1">
+                        <h3 className="text-sm font-semibold text-gray-300 mb-1">Tags</h3>
+                        <div className="flex flex-wrap gap-2">
+                            {tags.map(tag => {
+                                const isTagInSelectedChats = selectedGridChats.some(chatId => chats.find(c => c.id === chatId)?.tags?.includes(tag));
+                                const showPlus = numSelected > 0;
+                                const showMinus = numSelected > 0 && isTagInSelectedChats;
+
+                                return (
+                                    <div key={tag} className="flex items-center bg-gray-700 rounded-full">
+                                        <button
+                                            onClick={() => handleFilterChange('tags', tag)}
+                                            className={`px-2 py-1 text-xs transition-colors duration-200 ${activeFilters.tags?.includes(tag) ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${showPlus || showMinus ? 'rounded-l-full' : 'rounded-full'}`}>
+                                            {tag}
+                                        </button>
+                                        {showPlus && (
+                                            <button
+                                                onClick={() => onAssignTag(tag)}
+                                                className={`p-1 text-xs bg-gray-600 hover:bg-gray-500 text-white ${showMinus ? '' : 'rounded-r-full'}`}>
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                        {showMinus && (
+                                            <button
+                                                onClick={() => onRemoveTag(tag)}
+                                                className="p-1 text-xs rounded-r-full bg-gray-600 hover:bg-gray-500 text-white">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                            {showNewTagInput ? (
+                                <div className="flex items-center">
+                                    <input
+                                        type="text"
+                                        value={newTagValue}
+                                        onChange={(e) => setNewTagValue(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddNewTag()}
+                                        className="bg-gray-800 text-white px-2 py-1 rounded-full text-xs w-24"
+                                        autoFocus
+                                    />
+                                    <button onClick={handleAddNewTag} className="ml-2 text-green-500">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                    <button onClick={() => setShowNewTagInput(false)} className="ml-2 text-red-500">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            ) : (
                                 <button
-                                    key={status}
-                                    onClick={() => handleFilterChange('status', status)}
-                                    className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${colorClass}`}>
-                                    {status}
+                                    onClick={() => setShowNewTagInput(true)}
+                                    className="p-1 rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                                    </svg>
                                 </button>
-                            )
-                        })}
+                            )}
+                        </div>
+                    </div>
+                    <div className="col-span-4">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="col-span-1">
+                                <h3 className="text-sm font-semibold text-gray-300 mb-1">Event Type</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {types.map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => handleFilterChange('event_type', type)}
+                                            className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${activeFilters.event_type.includes(type) ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                                            {type}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="col-span-1">
+                                <h3 className="text-sm font-semibold text-gray-300 mb-1">Event Action</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {actions.map(action => (
+                                        <button
+                                            key={action}
+                                            onClick={() => handleFilterChange('event_action', action)}
+                                            className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${activeFilters.event_action.includes(action) ? 'bg-teal-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                                            {action}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="col-span-1">
+                                <h3 className="text-sm font-semibold text-gray-300 mb-1">Status</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {['Implemented', 'Modified', 'Unchanged'].map(status => {
+                                        const isActive = activeFilters.status.includes(status);
+                                        let colorClass = 'bg-gray-700 text-gray-300 hover:bg-gray-600';
+                                        if (isActive) {
+                                            if (status === 'Implemented') colorClass = 'bg-green-600 text-white';
+                                            else if (status === 'Modified') colorClass = 'bg-blue-600 text-white';
+                                            else if (status === 'Unchanged') colorClass = 'bg-white text-black';
+                                        }
+                                        return (
+                                            <button
+                                                key={status}
+                                                onClick={() => handleFilterChange('status', status)}
+                                                className={`px-2 py-1 text-xs rounded-full transition-colors duration-200 ${colorClass}`}>
+                                                {status}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1501,6 +1696,7 @@ function App() {
                                 <div className="flex flex-wrap gap-1 mt-2">
                                     {chat.filledSchema?.event_type && <span className="px-2 py-1 text-xs rounded-full bg-purple-600 text-white">{chat.filledSchema.event_type}</span>}
                                     {chat.filledSchema?.event_action && <span className="px-2 py-1 text-xs rounded-full bg-teal-600 text-white">{chat.filledSchema.event_action}</span>}
+                                    {(chat.tags || []).map(tag => <span key={tag} className="px-2 py-1 text-xs rounded-full bg-gray-600 text-white">{tag}</span>)}
                                 </div>
                             </div>
                             <div className="flex justify-end items-center mt-2">
@@ -1646,6 +1842,9 @@ function App() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                    <div className="p-3 border-t border-gray-800">
+                        <TagsInput tags={chat.tags || []} onTagsChange={(tags) => handleSaveTags(chat.id, tags)} />
                     </div>
                 </div>
             </div>
@@ -1904,7 +2103,7 @@ function App() {
                 )}
                 {visualizeMode ? (
                     <div className="flex flex-col w-full h-full">
-                        <FilterControls types={allEventTypes} actions={allEventActions} activeFilters={activeFilters} setActiveFilters={setActiveFilters} onSelectAll={handleGridSelectAll} numSelected={numSelectedInFiltered} numTotal={filteredGridChats.length} />
+                        <FilterControls types={allEventTypes} actions={allEventActions} tags={allTags} activeFilters={activeFilters} setActiveFilters={setActiveFilters} onSelectAll={handleGridSelectAll} numSelected={numSelectedInFiltered} numTotal={filteredGridChats.length} onAddNewTag={(newTag) => setAllTags(prev => [...prev, newTag])} onAssignTag={handleAssignTagToSelectedChats} onRemoveTag={handleRemoveTagFromSelectedChats} />
                         <div className="flex-grow overflow-y-auto">
                             <EventGrid key={gridVersion} chats={filteredGridChats} onSelectChat={handleSelectChatFromGrid} serverChats={serverChats} onOverride={handleOverrideImplementation} onUnimplement={handleUnimplement} onSync={handleSyncChatToServer} onDelete={handleDeleteChat} activeFilters={activeFilters} selectedChats={selectedGridChats} onSelect={handleGridItemSelect} />
                         </div>

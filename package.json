@@ -15,6 +15,7 @@
   "proxy": "http://localhost:8998",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "async": "^3.2.6",
     "concurrently": "^9.2.0",
     "diff": "^8.0.2",
     "dotenv": "^17.1.0",
@@ -23,7 +24,7 @@
     "jszip": "^3.10.1",
     "prettier": "^3.6.2",
     "react": "^19.1.0",
-    "react-diff-viewer": "^3.1.1",  
+    "react-diff-viewer": "^3.1.1",
     "react-dom": "^19.1.0",
     "react-scripts": "^5.0.1"
   },
