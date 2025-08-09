@@ -13,7 +13,10 @@
       }
     },
     "implemented": true,
-    "report": null
+    "report": null,
+    "tags": [
+      "Signup"
+    ]
   },
   {
     "id": 1753807992542.5632,
@@ -27,7 +30,10 @@
       "event_metadata": {}
     },
     "implemented": true,
-    "report": null
+    "report": null,
+    "tags": [
+      "Signup"
+    ]
   },
   {
     "id": 1753807998568.2832,
@@ -42,8 +48,11 @@
         "error_message": ""
       }
     },
-    "implemented": true,
-    "report": null
+    "implemented": false,
+    "report": null,
+    "tags": [
+      "Signup"
+    ]
   },
   {
     "id": 1753808003951.339,
@@ -57,7 +66,10 @@
       "event_metadata": {}
     },
     "implemented": true,
-    "report": null
+    "report": null,
+    "tags": [
+      "Signup"
+    ]
   },
   {
     "id": 1753808010215.4773,
@@ -71,7 +83,8 @@
       "event_metadata": {}
     },
     "implemented": true,
-    "report": null
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808016740.9443,
@@ -85,7 +98,8 @@
       "event_metadata": {}
     },
     "implemented": true,
-    "report": null
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808022376.768,
@@ -105,8 +119,11 @@
         "estimated_annual_mileage": 8000
       }
     },
-    "implemented": false,
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": [
+      "Quote"
+    ]
   },
   {
     "id": 1753808030195.2104,
@@ -123,7 +140,10 @@
       }
     },
     "implemented": false,
-    "report": null
+    "report": null,
+    "tags": [
+      "Quote"
+    ]
   },
   {
     "id": 1753808035697.949,
@@ -144,7 +164,10 @@
       }
     },
     "implemented": false,
-    "report": null
+    "report": null,
+    "tags": [
+      "Quote"
+    ]
   },
   {
     "id": 1753808041942.824,
@@ -158,7 +181,8 @@
       "event_metadata": {}
     },
     "implemented": false,
-    "report": null
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808047480.4426,
@@ -174,7 +198,8 @@
       }
     },
     "implemented": false,
-    "report": null
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808052873.8145,
@@ -190,7 +215,8 @@
       }
     },
     "implemented": false,
-    "report": null
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808058443.8083,
@@ -204,7 +230,8 @@
       "event_metadata": {}
     },
     "implemented": true,
-    "report": null
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808063837.2366,
@@ -220,7 +247,8 @@
       }
     },
     "implemented": false,
-    "report": null
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808071649.647,
@@ -236,7 +264,8 @@
       }
     },
     "implemented": false,
-    "report": null
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808077108.7122,
@@ -249,7 +278,9 @@
       "event_description": "Event logged when the user taps to edit their Date of Birth.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": false,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808082597.7644,
@@ -264,7 +295,9 @@
         "name_detail": "FIRST_NAME|LAST_NAME"
       }
     },
-    "report": null
+    "implemented": false,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808088130.0947,
@@ -279,7 +312,9 @@
         "address_detail": "ADDRESS|APT|ZIP_CODE"
       }
     },
-    "report": null
+    "implemented": false,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808094466.9968,
@@ -292,7 +327,9 @@
       "event_description": "Event logged when the user interacts with a UI element indicating the quote score is not ready.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": false,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808100216.5571,
@@ -307,7 +344,9 @@
         "error_message": "***"
       }
     },
-    "report": null
+    "implemented": false,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808105736.5356,
@@ -320,7 +359,9 @@
       "event_description": "Event logged when a driver is deemed ineligible.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": false,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808112694.1382,
@@ -333,7 +374,9 @@
       "event_description": "Event logged when the user clicks on the Discount Simulator button.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808121209.6782,
@@ -346,7 +389,9 @@
       "event_description": "Event logged when the Discount Simulator First-Time User Experience (FTUE) is shown to the user.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808127618.4905,
@@ -359,7 +404,9 @@
       "event_description": "Event logged when the user dismisses the Discount Simulator First Time User Experience (FTUE).",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808134605.393,
@@ -374,7 +421,9 @@
         "direction": "LEFT|RIGHT"
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808140841.4268,
@@ -389,7 +438,9 @@
         "index": 1
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808146566.2798,
@@ -404,7 +455,9 @@
         "index": 1
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808152327.8276,
@@ -419,7 +472,9 @@
         "index": 1
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808162341.6255,
@@ -434,7 +489,9 @@
         "index": 1
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808167935.4036,
@@ -449,7 +506,9 @@
         "index": 1
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808173557.87,
@@ -464,7 +523,9 @@
         "index": 1
       }
     },
-    "report": null
+    "implemented": false,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808183489.286,
@@ -477,7 +538,9 @@
       "event_description": "Event logged when user clicks on 'Where is my quote?' button.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808188971.861,
@@ -490,7 +553,9 @@
       "event_description": "Event logged when the user clicks the button to complete PII information for a quote.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808196188.6643,
@@ -503,7 +568,9 @@
       "event_description": "Event logged when the user clicks the 'Complete Setup' button on the quote page.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808201714.1006,
@@ -516,7 +583,9 @@
       "event_description": "Event logged when user successfully syncs their consent preferences with SafeStart.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808208933.3186,
@@ -529,7 +598,9 @@
       "event_description": "Event recorded when SafeStart consent synchronization fails due to a user action.",
       "event_metadata": {}
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808214549.3918,
@@ -546,7 +617,9 @@
         "forward_to_appsflyer": true
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808220278.2861,
@@ -563,7 +636,9 @@
         "forward_to_appsflyer": true
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808227743.2576,
@@ -580,7 +655,9 @@
         "forward_to_appsflyer": true
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   },
   {
     "id": 1753808233508.2942,
@@ -597,6 +674,8 @@
         "forward_to_appsflyer": true
       }
     },
-    "report": null
+    "implemented": true,
+    "report": null,
+    "tags": []
   }
 ]

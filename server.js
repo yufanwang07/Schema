@@ -170,7 +170,7 @@ app.post('/api/batch-schemas', async (req, res) => {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const prompt = `Given the following text, please split it into a list of distinct descriptions for creating separate event schemas. Each description should be a self-contained unit. Return the descriptions as a JSON array of strings. For example, if the input is "Create a schema for a user profile with name and email. Also, create a schema for a product with name and price.", the output should be ["Create a schema for a user profile with name and email.", "Create a schema for a product with name and price."]. Input text: ${content}`;
 
         const result = await model.generateContent(prompt);
@@ -522,7 +522,7 @@ app.post('/api/validate-implementation', async (req, res) => {
         }
 
         const metadataString = JSON.stringify(schema || {});
-        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for the logged event name as content in THE FILE CONTENT OF EVERY FILE *RECURSIVELY* (not filenames!), as well as likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. If event_metadata field is just {} assume no additional information is needed to be logged. ONLY CONSIDER THE EVENT_METADATA FIELD---THE OTHER FIELDS SUCHAS TYPE ACTION LABEL AND DESCRIPTION ARE ONLY FOR YOU TO UNDERSTAND. Logging should have a call to .event (commonly log.event) or .queueAppsFlyerEvent Schema: ${metadataString}. Return the relevant code segment of the logging as well (maybe 5 lines maximum) if found or incorrectly implemented`;
+        const prompt = `Your job is solely to verify the implementation of a logging schema event. Has the event with the following metadata been implemented in the codebase? Look for where this is logged by searching for the logged event name as content in THE FILE CONTENT OF EVERY FILE *RECURSIVELY* (not filenames!), as well as likely files, names, etc. Only consider the metadata in logged information-extra information is fine, but if some metadata is not logged, say it has been implemented incorrectly. If event_metadata field is just {} assume no additional information is needed to be logged. ONLY CONSIDER THE EVENT_METADATA FIELD---THE OTHER FIELDS SUCHAS TYPE ACTION LABEL AND DESCRIPTION ARE ONLY FOR YOU TO UNDERSTAND. Logging should have a call to .event (commonly log.event) or .queueAppsFlyerEvent Schema: ${metadataString}. Return the relevant code snippets as well if found or incorrectly implemented, and also the file name.`;
 
         let cliCommand, cliName, cliArgs;
         console.log("Spawning");
@@ -570,7 +570,7 @@ app.post('/api/validate-implementation', async (req, res) => {
                 const text = response.text();
                 const jsonResponse = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
 
-                const reportPrompt = `Based on the following response from a previous verification agent, provide a concise (1-2 sentences) report on whether the implementation is correct and why, including the relevant code segment. Return a single string.\n\nResponse:\n${stdoutData}`;
+                const reportPrompt = `Based on the following response from a previous verification agent, provide a concise report on whether the implementation is correct and why, including the relevant file and code blocks (don't give line numbers and give the code itself in \`\`\` tags, include surroudning code for context as well). Return a single string.\n\nResponse:\n${stdoutData}`;
                 const reportResult = await model.generateContent(reportPrompt);
                 const reportResponse = reportResult.response;
                 const reportText = reportResponse.text();
