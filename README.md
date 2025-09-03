@@ -1,6 +1,6 @@
 # Event Schema Manager
 
-This is a web-based tool for managing and injecting event schemas.
+This is a web-based tool for managing and injecting event schemas. https://github.com/yufanwang07/Schema
 
 ## Setup
 
